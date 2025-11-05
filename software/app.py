@@ -24,8 +24,10 @@ os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 DEVICE_SECRET_TOKEN = "my_secret_device_token_12345"
 
 # *** MỚI: Cấu hình 2 Camera RTSP ***
-RTSP_URL_IN = "rtsp://admin:admin@ace-3v-4t3kx75a.local:8554/live"
-RTSP_URL_OUT = "rtsp://admin:admin@spid3r-tab.local:8554/live"
+RTSP_URL_IN = "rtsp://admin:admin@192.168.0.102:8554/live"
+RTSP_URL_OUT = "rtsp://admin:admin@192.168.0.103:8554/live"
+# RTSP_URL_IN = "rtsp://admin:admin@ace-3v-4t3kx75a.local:8554/live"
+# RTSP_URL_OUT = "rtsp://admin:admin@spid3r-tab.local:8554/live"
 
 @app.template_filter('vn_dt')
 def vn_dt(value, fmt="%d/%m/%Y %H:%M:%S"):

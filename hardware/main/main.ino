@@ -22,7 +22,7 @@
 // ================== CẤU HÌNH CẦN THAY ĐỔI ==================
 const char* WIFI_SSID = "nosiaht";    // <-- THAY TÊN WIFI CỦA BẠN
 const char* WIFI_PASS = "88888888"; // <-- THAY MẬT KHẨU WIFI
-const char* SERVER_IP = "192.168.0.100"; // <-- THAY IP SERVER (IP máy chạy app.py)
+const char* SERVER_IP = "192.168.0.104"; // <-- THAY IP SERVER (IP máy chạy app.py)
 const int SERVER_PORT = 5000;
 const char* DEVICE_TOKEN = "my_secret_device_token_12345";
 // ===========================================================
