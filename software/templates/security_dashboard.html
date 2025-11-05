@@ -1,0 +1,448 @@
+{% extends 'layout.html' %} {% block title %}Bảng điều khiển Vận hành{% endblock
+%} {% block content %}
+<div class="container mx-auto pb-12" x-data="parkingSystem()" x-init="init()">
+  <div
+    x-show="generalMessage"
+    x-transition
+    class="fixed top-20 right-5 w-auto max-w-sm p-4 rounded-lg shadow-xl text-white z-[100]"
+    :class="{
+            'bg-green-500': messageType === 'success',
+            'bg-red-500': messageType === 'error',
+            'bg-blue-500': messageType === 'info'
+        }"
+    role="alert"
+  >
+    <p class="font-bold" x-text="generalMessage"></p>
+    <div
+      class="absolute bottom-0 left-0 h-1 bg-white/50"
+      :style="`width: ${messageProgress}%`"
+    ></div>
+  </div>
+
+  <div
+    id="waiting-for-scan"
+    x-show="currentState === 'waiting'"
+    x-transition:enter.duration.500ms
+  >
+    <div
+      class="text-center p-10 border-2 border-dashed border-slate-300 rounded-xl bg-white shadow-sm relative"
+    >
+      <div
+        class="absolute top-4 right-4 flex items-center gap-2 text-sm"
+        :class="isPolling ? 'text-green-600' : 'text-red-500'"
+      >
+        <template x-if="isPolling">
+          <span class="relative flex h-3 w-3"
+            ><span
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+            ></span
+            ><span
+              class="relative inline-flex rounded-full h-3 w-3 bg-green-500"
+            ></span
+          ></span>
+        </template>
+        <span x-text="isPolling ? 'Đang lắng nghe...' : 'Lỗi kết nối'"></span>
+      </div>
+      <h2 class="text-2xl font-semibold text-slate-800">
+        Chờ quét thẻ từ cổng...
+      </h2>
+      <p class="mt-2 text-slate-500">
+        Hệ thống sẽ tự động hiển thị khi có xe vãng lai quét thẻ vào.
+      </p>
+    </div>
+  </div>
+
+  <div
+    id="check-in-section"
+    x-show="currentState === 'checking_in'"
+    x-transition:enter.duration.300ms
+    class="mt-6 bg-white rounded-xl shadow-lg overflow-hidden"
+  >
+    <div class="bg-gradient-to-r from-green-500 to-emerald-600 p-4 text-white">
+      <h3 class="text-2xl font-bold">GỬI XE - NHẬN THÔNG TIN (VÃNG LAI)</h3>
+    </div>
+    <div class="p-6 grid grid-cols-12 gap-6">
+      
+      <div class="col-span-12 lg:col-span-7 space-y-4">
+        
+        <div class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden">
+          <img 
+            src="{{ url_for('video_feed_in') }}" 
+            alt="Video trực tiếp (Vào)"
+            class="w-full h-full object-cover bg-black text-white rounded"
+          >
+          </div>
+
+        <div class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden">
+          <img
+            :src="snapshotUrl"
+            class="rounded w-full h-full object-cover"
+            alt="Ảnh chụp biển số vào"
+          />
+        </div>
+      </div>
+
+      <div class="col-span-12 lg:col-span-5">
+        <div class="h-full flex flex-col">
+          <h4 class="text-base font-semibold mb-3 text-slate-800">
+            Thông tin Vào bãi
+          </h4>
+          <div
+            class="space-y-2 text-slate-700 text-sm p-4 bg-slate-50/50 rounded-lg border"
+          >
+            <div class="flex justify-between">
+              <span class="font-medium text-slate-500">ID Thẻ:</span>
+              <span class="font-mono" x-text="checkoutData.card_id"></span>
+            </div>
+            <div>
+              <label
+                for="license_plate_in"
+                class="block text-slate-500 font-medium mb-1"
+                >Biển số xe (bắt buộc):</label
+              >
+              <input
+                type="text"
+                id="license_plate_in"
+                x-model="licensePlate"
+                @keyup.enter="confirmPendingEntry()"
+                class="w-full px-3 py-2 text-base font-mono border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Nhập biển số vãng lai"
+                autofocus
+              />
+            </div>
+            <hr class="my-2 border-dashed" />
+            <div class="flex justify-between">
+              <span class="font-medium text-slate-500">Vào bãi (Scan):</span>
+              <span
+                class="text-slate-600"
+                x-text="checkoutData.entry_time"
+              ></span>
+            </div>
+          </div>
+          <div class="mt-3 flex items-center gap-3">
+            <button
+              @click="confirmPendingEntry()"
+              class="flex-1 py-2.5 text-sm font-semibold text-white bg-green-600 rounded-md hover:bg-green-700 transition shadow"
+            >
+              XÁC NHẬN VÀO
+            </button>
+            <button
+              @click="cancelPendingAction()"
+              class="py-2.5 px-4 text-sm font-semibold text-slate-700 bg-slate-200 rounded-md hover:bg-slate-300 transition"
+            >
+              HỦY
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="check-out-section"
+    x-show="currentState === 'checking_out'"
+    x-transition:enter.duration.300ms
+    class="mt-6 bg-white rounded-xl shadow-lg overflow-hidden"
+  >
+    <div class="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
+      <h3 class="text-2xl font-bold">XE RA BÃI - XÁC NHẬN THANH TOÁN</h3>
+    </div>
+    <div class="p-6 grid grid-cols-12 gap-6">
+      
+      <div class="col-span-12 lg:col-span-7 space-y-4">
+        
+        <div class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden">
+           <img 
+            src="{{ url_for('video_feed_out') }}" 
+            alt="Video trực tiếp (Ra)"
+            class="w-full h-full object-cover bg-black text-white rounded"
+          >
+          </div>
+
+        <div class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden flex flex-col">
+          <div class="text-sm font-semibold text-center mb-1 text-slate-600">
+            ẢNH LÚC VÀO ĐỂ ĐỐI CHIẾU
+          </div>
+          <img
+            :src="checkoutData.entry_snapshot_url || snapshotUrl"
+            class="rounded w-full object-cover shadow-inner flex-1 min-h-0"
+            alt="Ảnh đối chiếu"
+          />
+        </div>
+      </div>
+
+      <div class="col-span-12 lg:col-span-5">
+        <div class="h-full flex flex-col">
+          <h4 class="text-base font-semibold mb-3 text-slate-800">
+            Thông tin Giao dịch
+          </h4>
+          <div
+            class="space-y-2 text-slate-700 text-sm p-4 bg-slate-50/50 rounded-lg border"
+          >
+            <div class="flex justify-between">
+              <span class="font-medium text-slate-500">Biển số xe:</span>
+              <span
+                class="font-mono font-semibold text-slate-800"
+                x-text="checkoutData.license_plate"
+              ></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="font-medium text-slate-500">ID Thẻ:</span>
+              <span class="font-mono" x-text="checkoutData.card_id"></span>
+            </div>
+            <hr class="my-2 border-dashed" />
+            <div class="flex justify-between">
+              <span class="font-medium text-slate-500">Vào bãi:</span>
+              <span
+                class="text-slate-600"
+                x-text="checkoutData.entry_time"
+              ></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="font-medium text-slate-500">Ra bãi:</span>
+              <span
+                class="text-slate-600"
+                x-text="checkoutData.exit_time"
+              ></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="font-medium text-slate-500">Tổng thời gian:</span>
+              <span class="font-semibold" x-text="checkoutData.duration"></span>
+            </div>
+          </div>
+
+          <div
+            class="mt-3 p-4 text-center bg-red-50 rounded-lg border border-red-200"
+          >
+            <p
+              class="text-xs font-semibold text-red-800 uppercase tracking-wider"
+            >
+              TỔNG TIỀN
+            </p>
+            <p class="text-4xl font-extrabold text-red-600 tracking-tight my-1">
+              <span x-text="(checkoutData.fee || 0).toLocaleString('vi-VN')"></span>
+              <span class="text-2xl font-semibold">VNĐ</span>
+            </p>
+          </div>
+
+          <div class="mt-3 flex items-center gap-3">
+            <button
+              @click="confirmPendingExit()"
+              class="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition shadow"
+            >
+              XÁC NHẬN THU TIỀN
+            </button>
+            <button
+              @click="cancelPendingAction()"
+              class="py-2.5 px-4 text-sm font-semibold text-slate-700 bg-slate-200 rounded-md hover:bg-slate-300 transition"
+            >
+              HỦY
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function parkingSystem() {
+    return {
+      // STATE MANAGEMENT
+      currentState: "waiting", // 'waiting', 'checking_in', 'checking_out'
+      isPolling: false, // Trạng thái lắng nghe
+      pollInterval: null,
+      generalMessage: "",
+      messageType: "info",
+      messageTimer: null,
+      messageProgress: 100,
+
+      // DATA
+      licensePlate: "",
+      snapshotUrl: "{{ url_for('static', filename='placeholder.jpg') }}",
+      checkoutData: {
+        poll_id: null,
+        card_id: null,
+        entry_time: null,
+        // Thêm các trường cho xe ra
+        action_type: null,
+        transaction_id: null,
+        license_plate: null,
+        exit_time: null,
+        duration: null,
+        fee: 0,
+        entry_snapshot_url: null
+      },
+
+      // --- CORE METHODS ---
+      init() {
+        this.startPolling();
+      },
+
+      startPolling() {
+        if (this.pollInterval) clearInterval(this.pollInterval);
+        this.isPolling = true;
+        // Bắt đầu lắng nghe ngay
+        this.fetchPendingScan(); 
+        
+        // Thiết lập vòng lặp
+        this.pollInterval = setInterval(() => {
+          // Chỉ fetch khi đang ở màn hình chờ
+          if (this.currentState === 'waiting') {
+            this.fetchPendingScan();
+          }
+        }, 2000); // Lắng nghe mỗi 2 giây
+      },
+
+      stopPolling() {
+        if (this.pollInterval) clearInterval(this.pollInterval);
+        this.isPolling = false;
+      },
+
+      resetView() {
+        this.currentState = "waiting";
+        this.licensePlate = "";
+        this.snapshotUrl = "{{ url_for('static', filename='placeholder.jpf') }}";
+        this.checkoutData = { poll_id: null, card_id: null, entry_time: null, fee: 0 };
+        this.startPolling(); // Bắt đầu lắng nghe lại
+      },
+
+      displayMessage(message, type = "info", duration = 4000) {
+        // (Hàm này giữ nguyên, không thay đổi)
+        this.generalMessage = message;
+        this.messageType = type;
+        this.messageProgress = 100;
+        clearInterval(this.messageTimer);
+        if (duration > 0) {
+          const interval = 50;
+          const steps = duration / interval;
+          let currentStep = 0;
+          this.messageTimer = setInterval(() => {
+            currentStep++;
+            this.messageProgress = 100 - (currentStep / steps) * 100;
+            if (currentStep >= steps) {
+              clearInterval(this.messageTimer);
+              this.generalMessage = "";
+            }
+          }, interval);
+        }
+      },
+
+      // --- LOGIC NGHIỆP VỤ MỚI ---
+      
+      async fetchPendingScan() {
+        try {
+          const response = await fetch("/api/gate/get_pending_scans");
+          
+          if (!response.ok) {
+             throw new Error("Server error");
+          }
+
+          const result = await response.json();
+          this.isPolling = true; // Kết nối thành công
+
+          if (result && result.card_id) {
+            // TÌM THẤY YÊU CẦU!
+            this.stopPolling(); // Dừng lắng nghe
+            
+            // Đổ dữ liệu vào
+            this.checkoutData = result;
+            
+            if (result.action_type === 'entry') {
+                this.displayMessage(`Thẻ vào ${result.card_id} đang chờ!`, "info");
+                this.licensePlate = ""; // Xóa biển số cũ
+                this.currentState = 'checking_in'; // Chuyển giao diện VÀO
+                setTimeout(() => document.getElementById("license_plate_in").focus(), 100);
+            } 
+            else if (result.action_type === 'exit') {
+                this.displayMessage(`Thẻ ra ${result.card_id} chờ thu phí!`, "info");
+                this.currentState = 'checking_out'; // Chuyển giao diện RA
+            }
+          }
+          // Nếu không có gì (result = null), không làm gì cả, chờ lần poll sau
+
+        } catch (error) {
+          console.error("Lỗi Polling:", error);
+          this.isPolling = false; // Mất kết nối
+          this.displayMessage("Lỗi kết nối khi lắng nghe cổng!", "error", 2000);
+          this.stopPolling();
+          // Thử kết nối lại sau 5s
+          setTimeout(() => this.startPolling(), 5000);
+        }
+      },
+
+      async confirmPendingEntry() {
+        if (!this.licensePlate.trim()) {
+          alert("Vui lòng nhập biển số xe vãng lai.");
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/confirm_pending_entry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              poll_id: this.checkoutData.poll_id,
+              card_id: this.checkoutData.card_id,
+              license_plate: this.licensePlate.toString().toUpperCase(),
+            }),
+          });
+          
+          const result = await response.json();
+          if (response.ok) {
+            this.displayMessage(result.message, "success");
+            this.resetView(); // Quay về màn hình chờ
+          } else {
+            this.displayMessage(result.message || "Lỗi khi xác nhận.", "error");
+          }
+        } catch (error) {
+          this.displayMessage("Lỗi kết nối server khi xác nhận vào.", "error");
+        }
+      },
+
+      async cancelPendingAction() {
+        if (!confirm("Bạn có chắc muốn HỦY yêu cầu này? ESP32 sẽ báo lỗi.")) {
+            return;
+        }
+        try {
+          await fetch("/api/cancel_pending_action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              poll_id: this.checkoutData.poll_id
+            }),
+          });
+          this.displayMessage("Đã hủy yêu cầu.", "info");
+          this.resetView(); // Quay về màn hình chờ
+        } catch (error) {
+          this.displayMessage("Lỗi khi hủy yêu cầu.", "error");
+        }
+      },
+
+      async confirmPendingExit() {
+        try {
+          const response = await fetch("/api/confirm_pending_exit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              poll_id: this.checkoutData.poll_id,
+              transaction_id: this.checkoutData.transaction_id,
+              fee: this.checkoutData.fee
+            }),
+          });
+          const result = await response.json();
+          if (response.ok) {
+            this.displayMessage(result.message, "success");
+            this.resetView();
+          } else {
+            this.displayMessage(result.message || "Lỗi khi xác nhận thanh toán.", "error");
+          }
+        } catch (error) {
+          this.displayMessage("Lỗi kết nối server khi xác nhận ra.", "error");
+        }
+      }
+
+    };
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+{% block title %}Lịch sử Giao dịch{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6 text-gray-800">Lịch sử Giao dịch</h1>
+
+<div class="bg-white shadow-md rounded-lg overflow-hidden">
+  <div class="p-6 border-b">
+    <h2 class="text-xl font-semibold text-gray-700">Toàn bộ lượt xe ra vào</h2>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Thẻ</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Biển số xe</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vào lúc</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ra lúc</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phí (VNĐ)</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nhân viên TT</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ảnh</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for tx in transactions %}
+        {% set is_open = (tx.exit_time is none) %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ tx.id }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ tx.card_id }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{{ tx.license_plate or 'N/A' }}</td>
+
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {{ tx.entry_time|vn_dt }}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {{ (tx.exit_time|vn_dt) if tx.exit_time else 'Đang trong bãi' }}
+          </td>
+
+          <td class="px-6 py-4 whitespace-nowrap">
+            {% if is_open %}
+              <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Trong bãi</span>
+            {% else %}
+              <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Đã ra</span>
+            {% endif %}
+          </td>
+
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600">
+            {{ '{:,.0f}'.format(tx.fee) if tx.fee else 'N/A' }}
+          </td>
+
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ tx.security_user or 'N/A' }}</td>
+
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <div class="flex items-center gap-3">
+              {% if tx.entry_snapshot %}
+                <a href="{{ url_for('static', filename='snapshots/' ~ tx.entry_snapshot) }}" target="_blank" class="underline text-indigo-600 hover:text-indigo-800">Ảnh vào</a>
+              {% else %}
+                <span class="text-gray-400">—</span>
+              {% endif %}
+              {% if tx.exit_snapshot %}
+                <a href="{{ url_for('static', filename='snapshots/' ~ tx.exit_snapshot) }}" target="_blank" class="underline text-indigo-600 hover:text-indigo-800">Ảnh ra</a>
+              {% else %}
+                <span class="text-gray-400">—</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="px-6 py-12 text-center text-gray-500">Chưa có giao dịch nào được ghi nhận.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
