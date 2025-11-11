@@ -185,6 +185,16 @@ def add_card():
     license_plate = request.form.get('license_plate', '') 
     ticket_type = request.form.get('ticket_type', 'monthly') 
 
+    # ===== BÌNH LUẬN =====
+    # Đây chính là logic bạn yêu cầu:
+    # 1. Lấy 'license_plate' (biển số xe) từ form.
+    # 2. Lấy 'ticket_type' (loại vé) từ form.
+    # 3. Khi INSERT vào CSDL, nó kiểm tra:
+    #    - Nếu 'ticket_type' là 'monthly' (vé tháng), nó sẽ lưu 'license_plate' vào CSDL.
+    #    - Nếu 'ticket_type' là 'daily' (vãng lai), nó sẽ lưu là None (bỏ qua biển số).
+    # Đây chính là chức năng "định danh với biển" cho thẻ tháng.
+    # =====================
+
     conn = get_db_connection()
     try:
         conn.execute(
@@ -227,6 +237,11 @@ def view_transactions():
 def settings():
     conn = get_db_connection()
     if request.method == 'POST':
+        # ===== BÌNH LUẬN =====
+        # Đây là logic cho phép Admin thay đổi giá vé vãng lai.
+        # 1. Lấy 'fee_per_hour' từ form.
+        # 2. Cập nhật giá trị 'fee_per_hour' trong bảng 'settings'.
+        # =====================
         fee_per_hour = request.form['fee_per_hour']
         monthly_fee = request.form['monthly_fee']
         conn.execute('UPDATE settings SET value = ? WHERE key = ?', (fee_per_hour, 'fee_per_hour'))
@@ -435,7 +450,13 @@ def device_scan():
         if active_transaction:
             exit_time_dt = datetime.now()
             
-            # Thẻ tháng ra: Miễn phí, tự động (Chụp ảnh TỪ CAM RA)
+            # ===== BÌNH LUẬN =====
+            # YÊU CẦU CỦA BẠN ĐƯỢC XỬ LÝ TẠI ĐÂY (Thẻ tháng RA)
+            # 1. Kiểm tra 'card_info' tồn tại và 'ticket_type' là 'monthly'.
+            # 2. Chụp ảnh camera RA.
+            # 3. Cập nhật giao dịch (KHÔNG TÍNH PHÍ).
+            # 4. Trả về 'action: open' để ESP32 tự động mở cổng.
+            # =====================
             if card_info and card_info['ticket_type'] == 'monthly':
                 exit_snapshot_filename = capture_snapshot(card_id, 'out') # <-- CHỤP ẢNH CAM RA
                 conn.execute(
@@ -446,7 +467,13 @@ def device_scan():
                 conn.close()
                 return jsonify({'action': 'open', 'message': 'Thẻ tháng ra. Tạm biệt!'})
             
-            # Thẻ vãng lai ra: CHUYỂN SANG CHẾ ĐỘ CHỜ (POLL)
+            # ===== BÌNH LUẬN =====
+            # Đây là logic cho Thẻ vãng lai RA
+            # 1. Lấy 'fee_per_hour' từ bảng 'settings' (đã được Admin cài đặt).
+            # 2. Tính toán thời gian và số tiền.
+            # 3. Tạo 'pending_actions' (yêu cầu chờ).
+            # 4. Trả về 'action: poll' để bảo vệ thu tiền và xác nhận.
+            # =====================
             settings_data = conn.execute('SELECT * FROM settings').fetchall()
             settings = {row['key']: row['value'] for row in settings_data}
             fee_per_hour = int(settings.get('fee_per_hour', 5000))
@@ -479,7 +506,13 @@ def device_scan():
             else:
                 card_type = card_info['ticket_type']
 
-            # Thẻ tháng vào: Tự động (Chụp ảnh TỪ CAM VÀO)
+            # ===== BÌNH LUẬN =====
+            # YÊU CẦU CỦA BẠN ĐƯỢC XỬ LÝ TẠI ĐÂY (Thẻ tháng VÀO)
+            # 1. Kiểm tra 'card_type' là 'monthly'.
+            # 2. Chụp ảnh camera VÀO.
+            # 3. Tự động tạo giao dịch mới (sử dụng biển số đã đăng ký: card_info['license_plate']).
+            # 4. Trả về 'action: open' để ESP32 tự động mở cổng.
+            # =====================
             if card_type == 'monthly':
                 entry_snapshot_filename = capture_snapshot(card_id, 'in') # <-- CHỤP ẢNH CAM VÀO
                 conn.execute(
@@ -490,7 +523,11 @@ def device_scan():
                 conn.close()
                 return jsonify({'action': 'open', 'message': 'Thẻ tháng vào. Mời vào!'})
             
-            # Thẻ vãng lai vào: CHUYỂN SANG CHẾ ĐỘ CHỜ (POLL)
+            # ===== BÌNH LUẬN =====
+            # Đây là logic cho Thẻ vãng lai VÀO
+            # 1. Tạo 'pending_actions' (yêu cầu chờ).
+            # 2. Trả về 'action: poll' để bảo vệ nhập biển số và xác nhận.
+            # =====================
             else:
                 # Tạo một yêu cầu trong bảng pending_actions
                 pending = conn.execute(

@@ -17,6 +17,13 @@
   {% endif %} 
 {% endwith %}
 
+<!-- ===== BÌNH LUẬN ===== -->
+<!-- Đây là biểu mẫu (form) mà Admin sử dụng để đăng ký thẻ tháng. -->
+<!-- 1. Admin nhập 'ID Thẻ'. -->
+<!-- 2. Admin nhập 'Biển số xe (Vé tháng)'. -->
+<!-- 3. Admin chọn 'Loại vé' là 'Vé Tháng'. -->
+<!-- Khi nhấn 'Thêm', dữ liệu này được gửi đến '/admin/add_card' trong app.py -->
+<!-- ===================== -->
 <div class="mb-6 bg-white p-6 rounded-lg shadow-md">
   <h2 class="text-xl font-semibold mb-4 text-gray-700">Thêm Thẻ mới</h2>
   <form action="{{ url_for('add_card') }}" method="POST">
@@ -68,6 +75,7 @@
         <tr class="hover:bg-gray-50">
           <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ card.card_id }}</td>
           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ card.holder_name or 'N/A' }}</td>
+          <!-- Cột này hiển thị biển số xe đã đăng ký cho thẻ tháng -->
           <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{{ card.license_plate or 'N/A' }}</td>
           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             {% if card.ticket_type == 'monthly' %}
