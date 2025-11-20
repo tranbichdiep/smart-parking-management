@@ -1,104 +1,205 @@
 <!DOCTYPE html>
 <html lang="vi" class="h-full bg-slate-100">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}{% endblock %} - Hệ thống Bãi xe Pro</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}{% endblock %} - Hệ thống Bãi xe Pro</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
 
-  {% block extra_head %}{% endblock %}
-  <style>
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #f1f1f1; }
-    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #555; }
-  </style>
-</head>
-<body class="h-full">
-  <div class="min-h-full">
-    <!-- NAV -->
-    <nav x-data="{ open: false }" class="bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-slate-200">
-      <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-16">
-          <a class="text-xl font-bold text-slate-800" href="{{ url_for('index') }}">🚗 Bãi xe XYZ</a>
+    {% block extra_head %}{% endblock %}
+    <style>
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+    </style>
+  </head>
+  <body class="h-full">
+    <div class="min-h-full">
+      <!-- NAV -->
+      <nav
+        x-data="{ open: false }"
+        class="bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-slate-200"
+      >
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between items-center h-16">
+            <a
+              class="text-xl font-bold text-slate-800"
+              href="{{ url_for('index') }}"
+              >🚗 Bãi xe XYZ</a
+            >
 
-          <div class="hidden md:flex items-center space-x-5">
+            <div class="hidden md:flex items-center space-x-5">
+              {% if session.role == 'admin' %}
+              <a
+                href="{{ url_for('admin_dashboard') }}"
+                class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['admin_dashboard','add_card','delete_card'] else 'text-slate-600 hover:text-sky-500' }}"
+                >Quản lý Thẻ</a
+              >
+
+              <a
+                href="{{ url_for('view_transactions') }}"
+                class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['view_transactions'] else 'text-slate-600 hover:text-sky-500' }}"
+                >Giao dịch</a
+              >
+
+              <a
+                href="{{ url_for('user_management') }}"
+                class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['user_management'] else 'text-slate-600 hover:text-sky-500' }}"
+                >Nhân viên</a
+              >
+              <a
+                href="{{ url_for('statistics') }}"
+                class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint == 'statistics' else 'text-slate-600 hover:text-sky-500' }}"
+              >
+                📊 Thống kê
+              </a>
+              <a
+                href="{{ url_for('settings') }}"
+                class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['settings'] else 'text-slate-600 hover:text-sky-500' }}"
+                >Cài đặt</a
+              >
+              {% endif %} {% if session.role == 'security' %}
+              <a
+                href="{{ url_for('security_dashboard') }}"
+                class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['security_dashboard'] else 'text-slate-600 hover:text-sky-500' }}"
+                >Vận hành</a
+              >
+              {% endif %}
+
+              <div class="w-px h-5 bg-slate-200"></div>
+
+              {% if session.logged_in %}
+              <span class="text-sm text-slate-500"
+                >Chào,
+                <strong class="font-medium"
+                  >{{ session.username }}</strong
+                ></span
+              >
+              <a
+                href="{{ url_for('logout') }}"
+                class="px-3 py-1.5 rounded-md text-sm font-semibold text-white bg-red-500 hover:bg-red-600 shadow-sm transition-transform hover:scale-105"
+                >Đăng xuất</a
+              >
+              {% endif %}
+            </div>
+
+            <div class="md:hidden">
+              <button
+                @click="open = !open"
+                :aria-expanded="open.toString()"
+                class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none"
+              >
+                <svg
+                  class="h-6 w-6"
+                  stroke="currentColor"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    :class="{'hidden': open, 'inline-flex': !open }"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 6h16M4 12h16m-7 6h7"
+                  />
+                  <path
+                    :class="{'hidden': !open, 'inline-flex': open }"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile menu -->
+        <div x-show="open" @click.away="open = false" class="md:hidden">
+          <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {% if session.role == 'admin' %}
-              <a href="{{ url_for('admin_dashboard') }}"
-                 class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['admin_dashboard','add_card','delete_card'] else 'text-slate-600 hover:text-sky-500' }}">Quản lý Thẻ</a>
-              <a href="{{ url_for('view_transactions') }}"
-                 class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['view_transactions'] else 'text-slate-600 hover:text-sky-500' }}">Giao dịch</a>
-              <a href="{{ url_for('settings') }}"
-                 class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['settings'] else 'text-slate-600 hover:text-sky-500' }}">Cài đặt</a>
-            {% endif %}
-
-            {% if session.role == 'security' %}
-              <a href="{{ url_for('security_dashboard') }}"
-                 class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint in ['security_dashboard'] else 'text-slate-600 hover:text-sky-500' }}">Vận hành</a>
-            {% endif %}
-
-            <div class="w-px h-5 bg-slate-200"></div>
-
-            {% if session.logged_in %}
-              <span class="text-sm text-slate-500">Chào, <strong class="font-medium">{{ session.username }}</strong></span>
-              <a href="{{ url_for('logout') }}"
-                 class="px-3 py-1.5 rounded-md text-sm font-semibold text-white bg-red-500 hover:bg-red-600 shadow-sm transition-transform hover:scale-105">Đăng xuất</a>
+            <a
+              href="{{ url_for('admin_dashboard') }}"
+              class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['admin_dashboard','add_card','delete_card'] else 'text-slate-700 hover:bg-slate-100' }}"
+              >Quản lý Thẻ</a
+            >
+            <a
+              href="{{ url_for('view_transactions') }}"
+              class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['view_transactions'] else 'text-slate-700 hover:bg-slate-100' }}"
+              >Giao dịch</a
+            >
+            <a href="{{ url_for('statistics') }}" class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint == 'statistics' else 'text-slate-700 hover:bg-slate-100' }}">📊 Thống kê</a>
+            <a
+              href="{{ url_for('user_management') }}"
+              class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['user_management'] else 'text-slate-700 hover:bg-slate-100' }}"
+              >Nhân viên</a
+            >
+            <a
+              href="{{ url_for('settings') }}"
+              class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['settings'] else 'text-slate-700 hover:bg-slate-100' }}"
+              >Cài đặt</a
+            >
+            {% endif %} {% if session.role == 'security' %}
+            <a
+              href="{{ url_for('security_dashboard') }}"
+              class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['security_dashboard'] else 'text-slate-700 hover:bg-slate-100' }}"
+              >Vận hành</a
+            >
+            {% endif %} {% if session.logged_in %}
+            <a
+              href="{{ url_for('logout') }}"
+              class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-700 bg-red-50 hover:bg-red-100 mt-2"
+              >Đăng xuất</a
+            >
             {% endif %}
           </div>
+        </div>
+      </nav>
 
-          <div class="md:hidden">
-            <button @click="open = !open" :aria-expanded="open.toString()"
-                    class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none">
-              <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                <path :class="{'hidden': open, 'inline-flex': !open }" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/>
-                <path :class="{'hidden': !open, 'inline-flex': open }" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
+      <main class="container mx-auto mt-6 px-4 sm:px-6 lg:px-8">
+        <!-- GLOBAL FLASH (dùng chung mọi trang) -->
+        {% with messages = get_flashed_messages(with_categories=true) %} {% if
+        messages %}
+        <div class="mb-4 space-y-2">
+          {% for category, message in messages %} {% set color = 'green' if
+          category in ['success'] else 'red' %}
+          <div
+            x-data="{show:true}"
+            x-init="setTimeout(()=>show=false, 3500)"
+            x-show="show"
+            x-transition
+            class="flex justify-between items-center rounded border px-4 py-2 bg-{{ color }}-50 border-{{ color }}-200 text-{{ color }}-800"
+          >
+            <span>{{ message }}</span>
+            <button
+              @click="show=false"
+              class="text-{{ color }}-800/70 text-xl leading-none"
+            >
+              &times;
             </button>
           </div>
+          {% endfor %}
         </div>
-      </div>
+        {% endif %} {% endwith %} {% block content %}{% endblock %}
+      </main>
+    </div>
 
-      <!-- Mobile menu -->
-      <div x-show="open" @click.away="open = false" class="md:hidden">
-        <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          {% if session.role == 'admin' %}
-            <a href="{{ url_for('admin_dashboard') }}" class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['admin_dashboard','add_card','delete_card'] else 'text-slate-700 hover:bg-slate-100' }}">Quản lý Thẻ</a>
-            <a href="{{ url_for('view_transactions') }}" class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['view_transactions'] else 'text-slate-700 hover:bg-slate-100' }}">Giao dịch</a>
-            <a href="{{ url_for('settings') }}" class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['settings'] else 'text-slate-700 hover:bg-slate-100' }}">Cài đặt</a>
-          {% endif %}
-          {% if session.role == 'security' %}
-            <a href="{{ url_for('security_dashboard') }}" class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['security_dashboard'] else 'text-slate-700 hover:bg-slate-100' }}">Vận hành</a>
-          {% endif %}
-          {% if session.logged_in %}
-            <a href="{{ url_for('logout') }}" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-700 bg-red-50 hover:bg-red-100 mt-2">Đăng xuất</a>
-          {% endif %}
-        </div>
-      </div>
-    </nav>
-
-    <main class="container mx-auto mt-6 px-4 sm:px-6 lg:px-8">
-      <!-- GLOBAL FLASH (dùng chung mọi trang) -->
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="mb-4 space-y-2">
-            {% for category, message in messages %}
-              {% set color = 'green' if category in ['success'] else 'red' %}
-              <div x-data="{show:true}" x-init="setTimeout(()=>show=false, 3500)" x-show="show" x-transition
-                   class="flex justify-between items-center rounded border px-4 py-2 bg-{{ color }}-50 border-{{ color }}-200 text-{{ color }}-800">
-                <span>{{ message }}</span>
-                <button @click="show=false" class="text-{{ color }}-800/70 text-xl leading-none">&times;</button>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
-
-      {% block content %}{% endblock %}
-    </main>
-  </div>
-
-  {% block extra_js %}{% endblock %}
-</body>
+    {% block extra_js %}{% endblock %}
+  </body>
 </html>

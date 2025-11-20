@@ -2,6 +2,7 @@
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, flash, Response
 import sqlite3
 import os
+import json
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
 from datetime import datetime, timedelta
@@ -142,9 +143,17 @@ def login():
         username = request.form['username']
         password = request.form['password']
         conn = get_db_connection()
+        # Lấy thêm cột status
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         conn.close()
+        
         if user and check_password_hash(user['password_hash'], password):
+            # --- MỚI: Kiểm tra trạng thái ---
+            if user['status'] == 'locked':
+                flash('Tài khoản này đã bị KHÓA. Vui lòng liên hệ Admin.', 'danger')
+                return render_template('login.html')
+            # --------------------------------
+            
             session['logged_in'] = True
             session['username'] = user['username']
             session['role'] = user['role']
@@ -175,6 +184,112 @@ def admin_dashboard():
     cards = conn.execute('SELECT card_id, holder_name, license_plate, ticket_type, status FROM cards ORDER BY card_id').fetchall()
     conn.close()
     return render_template('admin_dashboard.html', cards=cards)
+
+# ======================================================
+# --- QUẢN LÝ NHÂN VIÊN (USER MANAGEMENT) ---
+# ======================================================
+
+@app.route('/admin/users')
+@login_required
+@role_required('admin')
+def user_management():
+    conn = get_db_connection()
+    # MỚI: Lấy thêm cột status
+    users = conn.execute('SELECT username, role, status FROM users').fetchall()
+    conn.close()
+    return render_template('user_management.html', users=users)
+
+@app.route('/admin/users/add', methods=['POST'])
+@login_required
+@role_required('admin')
+def add_user():
+    username = request.form['username'].strip()
+    password = request.form['password']
+    role = request.form['role']
+    status = request.form.get('status', 'active') # MỚI: Lấy status từ form
+    
+    if not username or not password:
+        flash('Vui lòng nhập đầy đủ thông tin!', 'danger')
+        return redirect(url_for('user_management'))
+
+    hashed_password = generate_password_hash(password)
+    
+    conn = get_db_connection()
+    try:
+        # MỚI: Insert thêm cột status
+        conn.execute(
+            'INSERT INTO users (username, password_hash, role, status) VALUES (?, ?, ?, ?)',
+            (username, hashed_password, role, status)
+        )
+        conn.commit()
+        flash(f'Đã thêm nhân viên "{username}" thành công!', 'success')
+    except sqlite3.IntegrityError:
+        flash(f'Lỗi: Tên đăng nhập "{username}" đã tồn tại!', 'danger')
+    finally:
+        conn.close()
+    return redirect(url_for('user_management'))
+
+@app.route('/admin/users/delete/<username>')
+@login_required
+@role_required('admin')
+def delete_user(username):
+    # Không cho phép xóa chính mình
+    if username == session['username']:
+        flash('Bạn không thể xóa tài khoản đang đăng nhập!', 'danger')
+        return redirect(url_for('user_management'))
+
+    conn = get_db_connection()
+    conn.execute('DELETE FROM users WHERE username = ?', (username,))
+    conn.commit()
+    conn.close()
+    flash(f'Đã xóa nhân viên "{username}"!', 'success')
+    return redirect(url_for('user_management'))
+
+@app.route('/admin/users/toggle_status/<username>')
+@login_required
+@role_required('admin')
+def toggle_user_status(username):
+    if username == session['username']:
+        flash('Không thể tự khóa chính mình!', 'danger')
+        return redirect(url_for('user_management'))
+
+    conn = get_db_connection()
+    user = conn.execute('SELECT status FROM users WHERE username = ?', (username,)).fetchone()
+    
+    if user:
+        # Đảo ngược trạng thái: active <-> locked
+        new_status = 'locked' if user['status'] == 'active' else 'active'
+        conn.execute('UPDATE users SET status = ? WHERE username = ?', (new_status, username))
+        conn.commit()
+        msg = 'Đã KHÓA' if new_status == 'locked' else 'Đã MỞ KHÓA'
+        flash(f'{msg} tài khoản "{username}"!', 'success')
+    
+    conn.close()
+    return redirect(url_for('user_management'))
+
+@app.route('/admin/users/reset_password', methods=['POST'])
+@login_required
+@role_required('admin')
+def reset_password():
+    username = request.form['username']
+    new_password = request.form['new_password']
+    
+    if not new_password:
+        flash('Mật khẩu mới không được để trống!', 'danger')
+        return redirect(url_for('user_management'))
+
+    hashed_password = generate_password_hash(new_password)
+    
+    conn = get_db_connection()
+    conn.execute(
+        'UPDATE users SET password_hash = ? WHERE username = ?',
+        (hashed_password, username)
+    )
+    conn.commit()
+    conn.close()
+    flash(f'Đã đổi mật khẩu cho "{username}" thành công!', 'success')
+    return redirect(url_for('user_management'))
+###
     
 @app.route('/admin/add_card', methods=['POST'])
 @login_required
@@ -238,6 +353,68 @@ def settings():
     conn.close()
     settings_dict = {row['key']: row['value'] for row in settings_data}
     return render_template('settings.html', settings=settings_dict)
+
+@app.route('/admin/statistics')
+@login_required
+@role_required('admin')
+def statistics():
+    conn = get_db_connection()
+    
+    # --- 1. Thống kê tổng quan (Hôm nay) ---
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    
+    # Tính tổng tiền thu được hôm nay (chỉ tính xe đã ra và có phí)
+    revenue_today = conn.execute(
+        "SELECT SUM(fee) FROM transactions WHERE date(exit_time) = ? AND fee IS NOT NULL", 
+        (today_str,)
+    ).fetchone()[0] or 0
+
+    # Đếm số lượt xe vào hôm nay
+    traffic_today = conn.execute(
+        "SELECT COUNT(*) FROM transactions WHERE date(entry_time) = ?", 
+        (today_str,)
+    ).fetchone()[0] or 0
+
+    # Đếm số xe đang còn trong bãi (chưa có giờ ra)
+    cars_in_parking = conn.execute(
+        "SELECT COUNT(*) FROM transactions WHERE exit_time IS NULL"
+    ).fetchone()[0] or 0
+
+    # --- 2. Thống kê biểu đồ (7 ngày gần nhất) ---
+    dates = []
+    revenues = []
+    traffics = []
+    
+    # Vòng lặp 7 ngày từ quá khứ đến hiện tại
+    for i in range(6, -1, -1):
+        day_check = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+        # Tạo nhãn ngày tháng (ví dụ: 20/11)
+        dates.append(datetime.strptime(day_check, "%Y-%m-%d").strftime("%d/%m"))
+        
+        # Query doanh thu ngày đó
+        rev = conn.execute(
+            "SELECT SUM(fee) FROM transactions WHERE date(exit_time) = ? AND fee IS NOT NULL", 
+            (day_check,)
+        ).fetchone()[0] or 0
+        revenues.append(rev)
+        
+        # Query lưu lượng xe vào ngày đó
+        traf = conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE date(entry_time) = ?", 
+            (day_check,)
+        ).fetchone()[0] or 0
+        traffics.append(traf)
+
+    conn.close()
+
+    # Truyền dữ liệu sang HTML. Dùng json.dumps để JavaScript đọc được mảng.
+    return render_template('statistics.html', 
+                           revenue_today=revenue_today,
+                           traffic_today=traffic_today,
+                           cars_in_parking=cars_in_parking,
+                           dates=json.dumps(dates),
+                           revenues=json.dumps(revenues),
+                           traffics=json.dumps(traffics))
 
 # ======================================================
 # --- TRANG BẢO VỆ (SECURITY DASHBOARD) ---

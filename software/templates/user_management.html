@@ -1,0 +1,126 @@
+{% extends "layout.html" %} 
+{% block title %}Quản lý Nhân viên{% endblock %} 
+
+{% block content %}
+<div class="flex justify-between items-center pb-2 mb-4 border-b">
+  <h1 class="text-3xl font-bold text-gray-800">Quản lý Nhân viên & Bảo vệ</h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %} 
+  {% if messages %} 
+    {% for category, message in messages %}
+      {% set color = 'green' if category == 'success' else 'red' %}
+      <div class="bg-{{ color }}-100 border border-{{ color }}-400 text-{{ color }}-700 px-4 py-3 rounded relative mb-4" role="alert">
+        <span class="block sm:inline">{{ message }}</span>
+      </div>
+    {% endfor %} 
+  {% endif %} 
+{% endwith %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-1">
+        <div class="bg-white p-6 rounded-lg shadow-md sticky top-24">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700 border-l-4 border-indigo-500 pl-2">Thêm Tài khoản</h2>
+            <form action="{{ url_for('add_user') }}" method="POST">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tên đăng nhập</label>
+                        <input type="text" name="username" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mật khẩu</label>
+                        <input type="password" name="password" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Vai trò</label>
+                            <select name="role" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="security">Bảo vệ</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Trạng thái</label>
+                            <select name="status" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="active">Hoạt động</option>
+                                <option value="locked">Đang Khóa</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none">
+                        Tạo tài khoản
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gray-50">
+                <h2 class="text-lg font-medium text-gray-900">Danh sách Tài khoản</h2>
+            </div>
+            <ul role="list" class="divide-y divide-gray-200">
+                {% for user in users %}
+                <li class="px-6 py-4 hover:bg-gray-50 transition duration-150 flex items-center justify-between" x-data="{ showReset: false }">
+                    
+                    <div class="flex items-center min-w-0 gap-4">
+                        <div class="relative">
+                            <span class="inline-flex items-center justify-center h-10 w-10 rounded-full {{ 'bg-red-100 text-red-700' if user.role == 'admin' else 'bg-green-100 text-green-700' }}">
+                                <span class="text-sm font-medium leading-none">{{ user.username[:2].upper() }}</span>
+                            </span>
+                            {% if user.status == 'active' %}
+                                <span class="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-white" title="Đang hoạt động"></span>
+                            {% else %}
+                                <span class="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-gray-400 ring-2 ring-white" title="Đã khóa"></span>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <p class="text-sm font-medium text-indigo-600 truncate">{{ user.username }}</p>
+                                {% if user.status == 'locked' %}
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Đã khóa</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-sm text-gray-500">
+                                {{ 'Quản trị viên' if user.role == 'admin' else 'Bảo vệ' }}
+                                {% if user.username == session['username'] %} <span class="text-xs text-indigo-400">(Bạn)</span> {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                         <div x-show="showReset" class="flex items-center gap-2" x-transition>
+                            <form action="{{ url_for('reset_password') }}" method="POST" class="flex gap-2">
+                                <input type="hidden" name="username" value="{{ user.username }}">
+                                <input type="password" name="new_password" placeholder="Pass mới" class="w-24 px-2 py-1 text-sm border border-gray-300 rounded" required>
+                                <button type="submit" class="text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-2 py-1 rounded">Lưu</button>
+                                <button type="button" @click="showReset = false" class="text-xs text-gray-500 hover:text-gray-700">Hủy</button>
+                            </form>
+                        </div>
+
+                        <div x-show="!showReset" class="flex items-center space-x-3">
+                            <button @click="showReset = true" class="text-sm text-blue-600 hover:text-blue-900">Đổi MK</button>
+                            
+                            {% if user.username != session['username'] %}
+                                <span class="text-gray-300">|</span>
+                                <a href="{{ url_for('toggle_user_status', username=user.username) }}" 
+                                   class="text-sm font-medium {{ 'text-green-600 hover:text-green-900' if user.status == 'locked' else 'text-orange-600 hover:text-orange-900' }}">
+                                   {{ 'Mở khóa' if user.status == 'locked' else 'Khóa' }}
+                                </a>
+                                
+                                <span class="text-gray-300">|</span>
+                                <a href="{{ url_for('delete_user', username=user.username) }}" 
+                                   class="text-sm font-medium text-red-600 hover:text-red-900"
+                                   onclick="return confirm('Xóa vĩnh viễn tài khoản này?');">Xóa</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

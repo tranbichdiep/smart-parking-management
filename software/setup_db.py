@@ -19,9 +19,15 @@ def setup_database():
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL
+            role TEXT NOT NULL,
+            status TEXT DEFAULT 'active'
         );
         """)
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';")
+            print("Đã thêm cột 'status' vào bảng users.")
+        except sqlite3.OperationalError:
+            pass # Cột đã tồn tại, bỏ qua
         print("Đã tạo/cập nhật bảng 'users'.")
 
         # --- Tạo/Cập nhật bảng cards ---
