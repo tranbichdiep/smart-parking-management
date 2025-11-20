@@ -452,16 +452,31 @@ def get_pending_scans():
         # Đánh dấu là 'processing' để không bị lấy lại
         conn.execute("UPDATE pending_actions SET status = 'processing' WHERE id = ?", (pending['id'],))
         conn.commit()
-        # conn.close() <-- *** LỖI NẰM Ở ĐÂY - XÓA DÒNG NÀY ***
 
         # Trả về một object đầy đủ, tùy thuộc vào 'entry' hay 'exit'
         if pending['action_type'] == 'entry':
-            conn.close() # <-- THÊM DÒNG ĐÓNG Ở ĐÂY
+            # --- THAY ĐỔI: Lấy thông tin thẻ (nếu có) ---
+            card_info = conn.execute("SELECT holder_name, license_plate, ticket_type FROM cards WHERE card_id = ?", (pending['card_id'],)).fetchone()
+            
+            holder_name = "Khách vãng lai"
+            license_plate = None
+            ticket_type = "daily"
+
+            if card_info:
+                holder_name = card_info['holder_name'] or "N/A"
+                license_plate = card_info['license_plate']
+                ticket_type = card_info['ticket_type']
+            
+            conn.close() # <-- ĐÓNG KẾT NỐI
             return jsonify({
                 "poll_id": pending['id'],
                 "action_type": "entry",
                 "card_id": pending['card_id'],
-                "entry_time": datetime.strptime(pending['created_at'], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M:%S")
+                "entry_time": datetime.strptime(pending['created_at'], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M:%S"),
+                # --- DỮ LIỆU MỚI ĐỂ HIỂN THỊ CHO BẢO VỆ ---
+                "holder_name": holder_name,
+                "license_plate": license_plate,
+                "ticket_type": ticket_type
             })
         elif pending['action_type'] == 'exit':
              # Tìm ảnh vào
@@ -612,73 +627,57 @@ def device_scan():
         if active_transaction:
             exit_time_dt = datetime.now()
             
-            # Thẻ tháng ra: Miễn phí, tự động (Chụp ảnh TỪ CAM RA)
-            if card_info and card_info['ticket_type'] == 'monthly':
-                exit_snapshot_filename = capture_snapshot(card_id, 'out') # <-- CHỤP ẢNH CAM RA
-                conn.execute(
-                    'UPDATE transactions SET exit_time = ?, security_user = ?, exit_snapshot = ? WHERE id = ?',
-                    (exit_time_dt.strftime("%Y-%m-%d %H:%M:%S"), 'ESP32-Gate', exit_snapshot_filename, active_transaction['id'])
-                )
-                conn.commit()
-                conn.close()
-                return jsonify({'action': 'open', 'message': 'Thẻ tháng ra. Tạm biệt!'})
+            # --- LOGIC MỚI: TẤT CẢ XE RA ĐỀU PHẢI CHỜ DUYỆT (THEO YÊU CẦU MỚI) ---
             
-            # Thẻ vãng lai ra: CHUYỂN SANG CHẾ ĐỘ CHỜ (POLL)
-            settings_data = conn.execute('SELECT * FROM settings').fetchall()
-            settings = {row['key']: row['value'] for row in settings_data}
-            fee_per_hour = int(settings.get('fee_per_hour', 5000))
+            fee = 0 # Mặc định là 0 (cho thẻ tháng)
+            card_type = 'daily' # Mặc định
+            if card_info:
+                card_type = card_info['ticket_type']
             
-            entry_time = datetime.strptime(active_transaction['entry_time'], "%Y-%m-%d %H:%M:%S")
-            duration = exit_time_dt - entry_time
-            hours = max(1, -(-duration.total_seconds() // 3600)) 
-            fee = int(hours * fee_per_hour)
+            # Tính toán thời gian (dùng chung cho cả 2 loại thẻ)
+            entry_time_dt = datetime.strptime(active_transaction['entry_time'], "%Y-%m-%d %H:%M:%S")
+            duration = exit_time_dt - entry_time_dt
+
+            # Nếu là thẻ vãng lai, TÍNH PHÍ
+            if card_type == 'daily':
+                settings_data = conn.execute('SELECT * FROM settings').fetchall()
+                settings = {row['key']: row['value'] for row in settings_data}
+                fee_per_hour = int(settings.get('fee_per_hour', 5000))
+                
+                hours = max(1, -(-duration.total_seconds() // 3600)) 
+                fee = int(hours * fee_per_hour)
             
-            # Tạo yêu cầu 'exit'
+            # (Else: card_type == 'monthly', fee vẫn là 0)
+
+            # Tạo yêu cầu 'exit' cho CẢ HAI LOẠI THẺ
             pending = conn.execute(
                 """INSERT INTO pending_actions 
                    (card_id, status, action_type, created_at, transaction_id, license_plate, entry_time, duration, fee) 
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (card_id, 'pending', 'exit', exit_time_dt.strftime("%Y-%m-%d %H:%M:%S"), 
-                 active_transaction['id'], active_transaction['license_plate'], active_transaction['entry_time'], 
-                 str(duration).split('.')[0], fee)
+                 active_transaction['id'], active_transaction['license_plate'], 
+                 active_transaction['entry_time'], str(duration).split('.')[0], fee) # fee sẽ là 0 nếu là thẻ tháng
             )
             conn.commit()
             poll_id = pending.lastrowid
             conn.close()
-            # Yêu cầu ESP32 poll
+            # Luôn yêu cầu ESP32 poll
             return jsonify({'action': 'poll', 'poll_id': poll_id, 'message': 'Xe ra, chờ bảo vệ...'})
 
         # === CASE 2: XE VÀO (Không có active_transaction) ===
         else:
-            if not card_info:
-                # Thẻ lạ, coi là vãng lai
-                card_type = 'daily'
-            else:
-                card_type = card_info['ticket_type']
-
-            # Thẻ tháng vào: Tự động (Chụp ảnh TỪ CAM VÀO)
-            if card_type == 'monthly':
-                entry_snapshot_filename = capture_snapshot(card_id, 'in') # <-- CHỤP ẢNH CAM VÀO
-                conn.execute(
-                    'INSERT INTO transactions (card_id, license_plate, entry_time, security_user, entry_snapshot) VALUES (?, ?, ?, ?, ?)',
-                    (card_id, card_info['license_plate'], datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'ESP32-Gate', entry_snapshot_filename)
-                )
-                conn.commit()
-                conn.close()
-                return jsonify({'action': 'open', 'message': 'Thẻ tháng vào. Mời vào!'})
+            # --- LOGIC MỚI: TẤT CẢ XE VÀO ĐỀU PHẢI CHỜ DUYỆT (THEO YÊU CẦU MỚI) ---
             
-            # Thẻ vãng lai vào: CHUYỂN SANG CHẾ ĐỘ CHỜ (POLL)
-            else:
-                # Tạo một yêu cầu trong bảng pending_actions
-                pending = conn.execute(
-                    "INSERT INTO pending_actions (card_id, status, action_type, created_at) VALUES (?, ?, ?, ?)",
-                    (card_id, 'pending', 'entry', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                )
-                conn.commit()
-                poll_id = pending.lastrowid
-                conn.close()
-                # Yêu cầu ESP32 poll
-                return jsonify({'action': 'poll', 'poll_id': poll_id, 'message': 'Chờ bảo vệ duyệt...'})
+            # Tạo một yêu cầu trong bảng pending_actions
+            pending = conn.execute(
+                "INSERT INTO pending_actions (card_id, status, action_type, created_at) VALUES (?, ?, ?, ?)",
+                (card_id, 'pending', 'entry', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            )
+            conn.commit()
+            poll_id = pending.lastrowid
+            conn.close()
+            # Luôn yêu cầu ESP32 poll
+            return jsonify({'action': 'poll', 'poll_id': poll_id, 'message': 'Chờ bảo vệ duyệt...'})
 
     except Exception as e:
         if conn:

@@ -59,7 +59,8 @@
     class="mt-6 bg-white rounded-xl shadow-lg overflow-hidden"
   >
     <div class="bg-gradient-to-r from-green-500 to-emerald-600 p-4 text-white">
-      <h3 class="text-2xl font-bold">GỬI XE - NHẬN THÔNG TIN (VÃNG LAI)</h3>
+      <!-- MỚI: Đổi tiêu đề dựa trên loại vé -->
+      <h3 class="text-2xl font-bold" x-text="checkoutData.ticket_type === 'monthly' ? 'GỬI XE - VÉ THÁNG' : 'GỬI XE - VÉ VÃNG LAI'">GỬI XE - NHẬN THÔNG TIN (VÃNG LAI)</h3>
     </div>
     <div class="p-6 grid grid-cols-12 gap-6">
       
@@ -94,19 +95,27 @@
               <span class="font-medium text-slate-500">ID Thẻ:</span>
               <span class="font-mono" x-text="checkoutData.card_id"></span>
             </div>
+            <!-- MỚI: HIỂN THỊ TÊN CHỦ THẺ -->
+            <div class="flex justify-between">
+              <span class="font-medium text-slate-500">Chủ thẻ:</span>
+              <span class="font-semibold" x-text="checkoutData.holder_name"></span>
+            </div>
             <div>
               <label
                 for="license_plate_in"
                 class="block text-slate-500 font-medium mb-1"
-                >Biển số xe (bắt buộc):</label
+                >Biển số xe:</label
               >
+              <!-- MỚI: Tự điền biển số và vô hiệu hóa nếu là vé tháng -->
               <input
                 type="text"
                 id="license_plate_in"
                 x-model="licensePlate"
                 @keyup.enter="confirmPendingEntry()"
                 class="w-full px-3 py-2 text-base font-mono border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="Nhập biển số vãng lai"
+                :placeholder="checkoutData.ticket_type === 'monthly' ? 'Biển số đã đăng ký' : 'Nhập biển số vãng lai'"
+                :disabled="checkoutData.ticket_type === 'monthly'"
+                :class="checkoutData.ticket_type === 'monthly' ? 'bg-gray-100 text-gray-500' : 'bg-white'"
                 autofocus
               />
             </div>
@@ -122,9 +131,10 @@
           <div class="mt-3 flex items-center gap-3">
             <button
               @click="confirmPendingEntry()"
-              class="flex-1 py-2.5 text-sm font-semibold text-white bg-green-600 rounded-md hover:bg-green-700 transition shadow"
+              class="flex-1 py-2.5 text-sm font-semibold text-white rounded-md hover:bg-green-700 transition shadow"
+              :class="checkoutData.ticket_type === 'monthly' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'"
             >
-              XÁC NHẬN VÀO
+              <span x-text="checkoutData.ticket_type === 'monthly' ? 'XÁC NHẬN VÉ THÁNG VÀO' : 'XÁC NHẬN VÀO'"></span>
             </button>
             <button
               @click="cancelPendingAction()"
@@ -211,13 +221,15 @@
             </div>
           </div>
 
+          <!-- MỚI: ẨN/HIỆN PHÍ CHO VÉ THÁNG -->
           <div
+            x-show="checkoutData.fee > 0"
             class="mt-3 p-4 text-center bg-red-50 rounded-lg border border-red-200"
           >
             <p
               class="text-xs font-semibold text-red-800 uppercase tracking-wider"
             >
-              TỔNG TIỀN
+              TỔNG TIỀN (VÃNG LAI)
             </p>
             <p class="text-4xl font-extrabold text-red-600 tracking-tight my-1">
               <span x-text="(checkoutData.fee || 0).toLocaleString('vi-VN')"></span>
@@ -225,12 +237,28 @@
             </p>
           </div>
 
+          <div
+            x-show="checkoutData.fee === 0"
+            class="mt-3 p-4 text-center bg-blue-50 rounded-lg border border-blue-200"
+          >
+            <p
+              class="text-xs font-semibold text-blue-800 uppercase tracking-wider"
+            >
+              VÉ THÁNG
+            </p>
+            <p class="text-2xl font-bold text-blue-600 tracking-tight my-1">
+              KHÔNG THU PHÍ
+            </p>
+          </div>
+          <!-- KẾT THÚC THAY ĐỔI -->
+
           <div class="mt-3 flex items-center gap-3">
             <button
               @click="confirmPendingExit()"
               class="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition shadow"
             >
-              XÁC NHẬN THU TIỀN
+              <!-- MỚI: THAY ĐỔI TEXT NÚT BẤM -->
+              <span x-text="checkoutData.fee > 0 ? 'XÁC NHẬN THU TIỀN' : 'XÁC NHẬN XE RA (VÉ THÁNG)'"></span>
             </button>
             <button
               @click="cancelPendingAction()"
@@ -271,7 +299,10 @@
         exit_time: null,
         duration: null,
         fee: 0,
-        entry_snapshot_url: null
+        entry_snapshot_url: null,
+        // --- MỚI: Thêm 2 trường ---
+        holder_name: 'Khách vãng lai',
+        ticket_type: 'daily' 
       },
 
       // --- CORE METHODS ---
@@ -302,8 +333,14 @@
       resetView() {
         this.currentState = "waiting";
         this.licensePlate = "";
-        this.snapshotUrl = "{{ url_for('static', filename='placeholder.jpf') }}";
-        this.checkoutData = { poll_id: null, card_id: null, entry_time: null, fee: 0 };
+        this.snapshotUrl = "{{ url_for('static', filename='placeholder.jpg') }}";
+        // --- MỚI: Reset cả 2 trường mới ---
+        this.checkoutData = { 
+            poll_id: null, card_id: null, entry_time: null, fee: 0, 
+            transaction_id: null, license_plate: null, exit_time: null,
+            duration: null, entry_snapshot_url: null,
+            holder_name: 'Khách vãng lai', ticket_type: 'daily' 
+        };
         this.startPolling(); // Bắt đầu lắng nghe lại
       },
 
@@ -349,10 +386,24 @@
             this.checkoutData = result;
             
             if (result.action_type === 'entry') {
+                // --- THAY ĐỔI: Gán dữ liệu mới ---
+                this.licensePlate = result.license_plate || ""; // Tự điền nếu là vé tháng
+                this.checkoutData.holder_name = result.holder_name || "Khách vãng lai";
+                this.checkoutData.ticket_type = result.ticket_type || "daily";
+                // --- KẾT THÚC THAY ĐỔI ---
+
                 this.displayMessage(`Thẻ vào ${result.card_id} đang chờ!`, "info");
-                this.licensePlate = ""; // Xóa biển số cũ
                 this.currentState = 'checking_in'; // Chuyển giao diện VÀO
-                setTimeout(() => document.getElementById("license_plate_in").focus(), 100);
+                setTimeout(() => {
+                    const plateInput = document.getElementById("license_plate_in");
+                    if(plateInput) {
+                        plateInput.focus();
+                        // Chỉ bôi đen text nếu là vãng lai (để nhập đè)
+                        if(this.checkoutData.ticket_type === 'daily') {
+                            plateInput.select();
+                        }
+                    }
+                }, 100);
             } 
             else if (result.action_type === 'exit') {
                 this.displayMessage(`Thẻ ra ${result.card_id} chờ thu phí!`, "info");
@@ -373,7 +424,7 @@
 
       async confirmPendingEntry() {
         if (!this.licensePlate.trim()) {
-          alert("Vui lòng nhập biển số xe vãng lai.");
+          alert("Vui lòng nhập biển số xe.");
           return;
         }
 

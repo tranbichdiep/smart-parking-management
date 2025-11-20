@@ -20,6 +20,11 @@
         <h2 class="text-xl font-semibold text-gray-700">Cấu hình Giá vé</h2>
     </div>
     <form method="POST" action="{{ url_for('settings') }}">
+        <!-- ===== BÌNH LUẬN ===== -->
+        <!-- Đây là ô cho phép Admin cài đặt giá vé vãng lai. -->
+        <!-- Tên (name) của nó là 'fee_per_hour'. -->
+        <!-- Giá trị này được app.py (hàm device_scan) sử dụng để tính tiền cho thẻ vãng lai. -->
+        <!-- ===================== -->
         <div class="mb-4">
             <label for="fee_per_hour" class="block text-sm font-medium text-gray-700 mb-1">Phí gửi xe Vãng lai (VNĐ/giờ)</label>
             <input type="number" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" id="fee_per_hour" name="fee_per_hour" value="{{ settings.fee_per_hour }}" required>
