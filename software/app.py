@@ -354,68 +354,116 @@ def settings():
     settings_dict = {row['key']: row['value'] for row in settings_data}
     return render_template('settings.html', settings=settings_dict)
 
+# [Trong file software/app.py]
+
 @app.route('/admin/statistics')
 @login_required
 @role_required('admin')
 def statistics():
     conn = get_db_connection()
     
-    # --- 1. Thống kê tổng quan (Hôm nay) ---
+    # --- 1. Thống kê tổng quan (Hôm nay) - GIỮ NGUYÊN ---
     today_str = datetime.now().strftime("%Y-%m-%d")
     
-    # Tính tổng tiền thu được hôm nay (chỉ tính xe đã ra và có phí)
     revenue_today = conn.execute(
         "SELECT SUM(fee) FROM transactions WHERE date(exit_time) = ? AND fee IS NOT NULL", 
         (today_str,)
     ).fetchone()[0] or 0
 
-    # Đếm số lượt xe vào hôm nay
     traffic_today = conn.execute(
         "SELECT COUNT(*) FROM transactions WHERE date(entry_time) = ?", 
         (today_str,)
     ).fetchone()[0] or 0
 
-    # Đếm số xe đang còn trong bãi (chưa có giờ ra)
     cars_in_parking = conn.execute(
         "SELECT COUNT(*) FROM transactions WHERE exit_time IS NULL"
     ).fetchone()[0] or 0
 
-    # --- 2. Thống kê biểu đồ (7 ngày gần nhất) ---
-    dates = []
-    revenues = []
-    traffics = []
+    # --- 2. Xử lý Lọc dữ liệu Biểu đồ ---
     
-    # Vòng lặp 7 ngày từ quá khứ đến hiện tại
-    for i in range(6, -1, -1):
-        day_check = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        # Tạo nhãn ngày tháng (ví dụ: 20/11)
-        dates.append(datetime.strptime(day_check, "%Y-%m-%d").strftime("%d/%m"))
-        
-        # Query doanh thu ngày đó
-        rev = conn.execute(
-            "SELECT SUM(fee) FROM transactions WHERE date(exit_time) = ? AND fee IS NOT NULL", 
-            (day_check,)
-        ).fetchone()[0] or 0
-        revenues.append(rev)
-        
-        # Query lưu lượng xe vào ngày đó
-        traf = conn.execute(
-            "SELECT COUNT(*) FROM transactions WHERE date(entry_time) = ?", 
-            (day_check,)
-        ).fetchone()[0] or 0
-        traffics.append(traf)
+    # Lấy tham số từ URL
+    filter_type = request.args.get('filter', '7days') # Mặc định là 7 ngày
+    start_input = request.args.get('start', '')
+    end_input = request.args.get('end', '')
 
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=6) # Mặc định 7 ngày (0->6)
+
+    # Logic xác định khoảng thời gian
+    if filter_type == '6months':
+        # Lấy 180 ngày gần nhất
+        start_date = end_date - timedelta(days=180)
+    elif filter_type == 'custom' and start_input and end_input:
+        try:
+            start_date = datetime.strptime(start_input, "%Y-%m-%d")
+            # Set end_date là cuối ngày đó (23:59:59) để query đúng
+            end_date = datetime.strptime(end_input, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        except ValueError:
+            pass # Nếu lỗi format thì giữ mặc định
+
+    # Tạo danh sách các ngày trong khoảng (trục hoành X)
+    date_labels = []
+    delta = (end_date - start_date).days
+    # Đảm bảo ít nhất 1 ngày
+    if delta < 0: delta = 0
+    
+    for i in range(delta + 1):
+        day = start_date + timedelta(days=i)
+        date_labels.append(day.strftime("%Y-%m-%d"))
+
+    # --- 3. Truy vấn dữ liệu (Tối ưu hóa dùng GROUP BY) ---
+    
+    # Format lại để query SQL
+    s_str = start_date.strftime("%Y-%m-%d 00:00:00")
+    e_str = end_date.strftime("%Y-%m-%d 23:59:59")
+
+    # Query Doanh thu (theo ngày ra)
+    rev_data = conn.execute("""
+        SELECT date(exit_time) as day, SUM(fee) as total 
+        FROM transactions 
+        WHERE exit_time BETWEEN ? AND ? AND fee IS NOT NULL
+        GROUP BY date(exit_time)
+    """, (s_str, e_str)).fetchall()
+    
+    # Query Lưu lượng (theo ngày vào)
+    traf_data = conn.execute("""
+        SELECT date(entry_time) as day, COUNT(*) as total 
+        FROM transactions 
+        WHERE entry_time BETWEEN ? AND ?
+        GROUP BY date(entry_time)
+    """, (s_str, e_str)).fetchall()
+    
     conn.close()
 
-    # Truyền dữ liệu sang HTML. Dùng json.dumps để JavaScript đọc được mảng.
+    # --- 4. Map dữ liệu SQL vào danh sách ngày liên tục ---
+    # Chuyển list SQL thành dictionary để tra cứu nhanh: {'2023-10-25': 50000, ...}
+    rev_dict = {row['day']: row['total'] for row in rev_data}
+    traf_dict = {row['day']: row['total'] for row in traf_data}
+
+    final_dates = []   # Label hiển thị (dd/mm)
+    final_revenues = []
+    final_traffics = []
+
+    for d_str in date_labels:
+        # Tạo label đẹp (dd/mm)
+        d_obj = datetime.strptime(d_str, "%Y-%m-%d")
+        final_dates.append(d_obj.strftime("%d/%m"))
+        
+        # Lấy dữ liệu, nếu không có thì bằng 0
+        final_revenues.append(rev_dict.get(d_str, 0))
+        final_traffics.append(traf_dict.get(d_str, 0))
+
     return render_template('statistics.html', 
                            revenue_today=revenue_today,
                            traffic_today=traffic_today,
                            cars_in_parking=cars_in_parking,
-                           dates=json.dumps(dates),
-                           revenues=json.dumps(revenues),
-                           traffics=json.dumps(traffics))
-
+                           dates=json.dumps(final_dates),
+                           revenues=json.dumps(final_revenues),
+                           traffics=json.dumps(final_traffics),
+                           # Truyền lại để hiển thị trên giao diện
+                           current_filter=filter_type,
+                           current_start=start_date.strftime("%Y-%m-%d"),
+                           current_end=end_date.strftime("%Y-%m-%d"))
 # ======================================================
 # --- TRANG BẢO VỆ (SECURITY DASHBOARD) ---
 # ======================================================

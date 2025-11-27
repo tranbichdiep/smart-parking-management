@@ -1,123 +1,517 @@
-{% extends "layout.html" %}
-{% block title %}Thống kê Doanh thu{% endblock %}
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bãi xe Thông minh HUST - Xem chỗ trống Online</title>
 
-{% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-{% endblock %}
+    <script src="https://cdn.tailwindcss.com"></script>
 
-{% block content %}
-<div class="space-y-6">
-    
-    <div class="flex justify-between items-center border-b pb-4">
-        <h1 class="text-3xl font-bold text-slate-800">Báo cáo Thống kê</h1>
-        <span class="text-sm text-slate-500 italic">Dữ liệu cập nhật theo thời gian thực</span>
-    </div>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap"
+      rel="stylesheet"
+    />
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4">
-            <div class="p-3 bg-green-100 text-green-600 rounded-full">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-slate-500">Doanh thu Hôm nay</p>
-                <p class="text-2xl font-bold text-slate-800">{{ "{:,.0f}".format(revenue_today) }} VNĐ</p>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4">
-            <div class="p-3 bg-blue-100 text-blue-600 rounded-full">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-slate-500">Lượt xe vào hôm nay</p>
-                <p class="text-2xl font-bold text-slate-800">{{ traffic_today }} lượt</p>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4">
-            <div class="p-3 bg-orange-100 text-orange-600 rounded-full">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-slate-500">Xe đang gửi</p>
-                <p class="text-2xl font-bold text-slate-800">{{ cars_in_parking }} xe</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h3 class="text-lg font-semibold text-slate-700 mb-4">Biểu đồ Doanh thu (7 ngày qua)</h3>
-            <canvas id="revenueChart"></canvas>
-        </div>
-
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h3 class="text-lg font-semibold text-slate-700 mb-4">Lưu lượng xe vào (7 ngày qua)</h3>
-            <canvas id="trafficChart"></canvas>
-        </div>
-    </div>
-</div>
-
-<script>
-    // Lấy dữ liệu từ Flask truyền sang
-    const dates = JSON.parse('{{ dates | safe }}');
-    const revenues = JSON.parse('{{ revenues | safe }}');
-    const traffics = JSON.parse('{{ traffics | safe }}');
-
-    // 1. Cấu hình Biểu đồ Doanh thu (Bar Chart)
-    const ctxRev = document.getElementById('revenueChart').getContext('2d');
-    new Chart(ctxRev, {
-        type: 'bar',
-        data: {
-            labels: dates,
-            datasets: [{
-                label: 'Doanh thu (VNĐ)',
-                data: revenues,
-                backgroundColor: 'rgba(16, 185, 129, 0.6)', // Màu xanh lá
-                borderColor: 'rgba(16, 185, 129, 1)',
-                borderWidth: 1,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: { beginAtZero: true }
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+            colors: {
+              brand: { 500: "#2563eb", 600: "#1d4ed8", 900: "#1e3a8a" },
             },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.raw.toLocaleString('vi-VN') + ' VNĐ';
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // 2. Cấu hình Biểu đồ Lưu lượng (Line Chart)
-    const ctxTraff = document.getElementById('trafficChart').getContext('2d');
-    new Chart(ctxTraff, {
-        type: 'line',
-        data: {
-            labels: dates,
-            datasets: [{
-                label: 'Lượt xe vào',
-                data: traffics,
-                backgroundColor: 'rgba(59, 130, 246, 0.2)', // Màu xanh dương
-                borderColor: 'rgba(59, 130, 246, 1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.3 // Làm mềm đường cong
-            }]
+          },
         },
-        options: {
-            responsive: true,
-            scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } }
-            }
+      };
+    </script>
+    <style>
+      .glass-effect {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+      }
+      .animate-pulse-slow {
+        animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800 antialiased">
+    <nav
+      class="fixed w-full z-50 glass-effect border-b border-slate-200 shadow-sm transition-all duration-300"
+      id="navbar"
+    >
+      <div
+        class="container mx-auto px-6 py-4 flex justify-between items-center"
+      >
+        <a
+          href="#"
+          class="flex items-center gap-2 text-2xl font-extrabold text-brand-600"
+        >
+          <i class="fa-solid fa-square-parking"></i> HUST<span
+            class="text-slate-700"
+            >Parking</span
+          >
+        </a>
+        <div class="hidden md:flex items-center space-x-8 font-medium text-sm">
+          <a href="#status" class="hover:text-brand-600 transition"
+            >Trạng thái</a
+          >
+          <a href="#pricing" class="hover:text-brand-600 transition"
+            >Bảng giá</a
+          >
+          <a href="#procedures" class="hover:text-brand-600 transition">Thủ tục</a>
+          <a href="#location" class="hover:text-brand-600 transition">Vị trí</a>
+          <a
+            href="#contact"
+            class="px-5 py-2.5 bg-brand-600 text-white rounded-full hover:bg-brand-500 transition shadow-lg shadow-brand-500/30"
+          >
+            Đăng ký Vé tháng
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <section
+      id="status"
+      class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden"
+    >
+      <div class="absolute inset-0 z-0">
+        <img
+          src="https://images.unsplash.com/photo-1470224114660-3f6686c562eb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80"
+          alt="Parking Background"
+          class="w-full h-full object-cover opacity-10"
+        />
+        <div
+          class="absolute inset-0 bg-gradient-to-b from-slate-50/80 to-slate-50"
+        ></div>
+      </div>
+
+      <div class="container mx-auto px-6 relative z-10 text-center">
+        <span
+          class="inline-block py-1 px-3 rounded-full bg-brand-100 text-brand-600 text-sm font-bold tracking-wider mb-4 border border-brand-200"
+        >
+          HỆ THỐNG GIÁM SÁT THỜI GIAN THỰC
+        </span>
+        <h1
+          class="text-2xl md:text-4xl font-black text-slate-900 mb-6 leading-tight"
+        >
+          Tìm chỗ đỗ xe <br />
+          <span class="text-brand-600">Thông minh & Dễ dàng</span>
+        </h1>
+        <p class="text-base text-slate-500 mb-10 max-w-2xl mx-auto">
+          Cập nhật số lượng chỗ trống trực tiếp từ hệ thống kiểm soát vào ra tại
+          bãi xe Đại học Bách Khoa Hà Nội.
+        </p>
+
+        <div
+          class="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden transform hover:-translate-y-1 transition duration-500"
+        >
+          <div
+            class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100"
+          >
+            <div
+              class="p-8 flex flex-col items-center justify-center bg-green-50/50"
+            >
+              <p class="text-sm text-slate-500 font-semibold uppercase mb-2">
+                Tình trạng bãi
+              </p>
+              <div class="flex items-center gap-3">
+                <span class="relative flex h-4 w-4">
+                  <span
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+                  ></span>
+                  <span
+                    class="relative inline-flex rounded-full h-4 w-4 bg-green-500"
+                  ></span>
+                </span>
+                <span class="text-2xl font-bold text-green-700" id="status-text"
+                  >Đang mở cửa</span
+                >
+              </div>
+            </div>
+
+            <div
+              class="p-8 md:col-span-2 flex flex-col items-center justify-center relative"
+            >
+              <p class="text-sm text-slate-500 font-semibold uppercase mb-1">
+                Số chỗ còn trống hiện tại
+              </p>
+
+              <div class="flex items-baseline gap-2">
+                <span
+                  id="slots-count"
+                  class="text-8xl font-black text-slate-800 tracking-tighter"
+                  >--</span
+                >
+                <span class="text-xl text-slate-400 font-medium"
+                  >/ <span id="total-slots">50</span> chỗ</span
+                >
+              </div>
+
+              <p class="text-xs text-slate-400 mt-2 flex items-center gap-1">
+                <i class="fa-regular fa-clock"></i> Cập nhật:
+                <span id="last-updated">Đang tải...</span>
+              </p>
+            </div>
+          </div>
+
+          <div id="loading-bar" class="h-1 w-full bg-slate-100 overflow-hidden">
+            <div
+              class="h-full bg-brand-500 w-1/3 animate-[loading_1s_ease-in-out_infinite]"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing" class="py-20 bg-white">
+      <div class="container mx-auto px-6">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl font-bold text-slate-900">Bảng giá Niêm yết</h2>
+          <p class="text-slate-500 mt-2">
+            Chi phí minh bạch, không phát sinh phụ phí.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div
+            class="p-8 rounded-2xl border border-slate-200 bg-slate-50 hover:border-brand-200 transition group relative overflow-hidden"
+          >
+            <div
+              class="absolute top-0 right-0 bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1 rounded-bl-lg"
+            >
+              PHỔ BIẾN
+            </div>
+            <h3 class="text-xl font-bold text-slate-800 mb-2">
+              Vé Vãng lai (Theo giờ)
+            </h3>
+            <div class="flex items-baseline gap-1 mb-6">
+              <span class="text-4xl font-black text-brand-600">20.000đ</span>
+              <span class="text-slate-500">/ giờ</span>
+            </div>
+            <ul class="space-y-3 text-slate-600 mb-8">
+              <li class="flex items-center gap-2">
+                <i class="fa-solid fa-check text-green-500"></i> Phù hợp gửi
+                ngắn hạn
+              </li>
+              <li class="flex items-center gap-2">
+                <i class="fa-solid fa-check text-green-500"></i> Thanh toán khi
+                ra
+              </li>
+              <li class="flex items-center gap-2">
+                <i class="fa-solid fa-check text-green-500"></i> Có camera giám
+                sát an ninh
+              </li>
+            </ul>
+          </div>
+
+          <div
+            class="p-8 rounded-2xl border-2 border-brand-600 bg-white shadow-xl relative transform md:-translate-y-4"
+          >
+            <div
+              class="absolute top-0 inset-x-0 bg-brand-600 text-white text-center text-xs font-bold py-1.5 uppercase tracking-widest"
+            >
+              Khuyên dùng
+            </div>
+            <h3 class="text-xl font-bold text-slate-800 mt-4 mb-2">
+              Vé Tháng Ưu đãi
+            </h3>
+            <div class="flex items-baseline gap-1 mb-6">
+              <span class="text-4xl font-black text-slate-900">200.000đ</span>
+              <span class="text-slate-500">/ tháng</span>
+            </div>
+            <ul class="space-y-3 text-slate-600 mb-8">
+              <li class="flex items-center gap-2">
+                <i class="fa-solid fa-check text-brand-600"></i>
+                <strong>Ra vào không giới hạn</strong>
+              </li>
+              <li class="flex items-center gap-2">
+                <i class="fa-solid fa-check text-brand-600"></i> Không cần chờ
+                thanh toán
+              </li>
+              <li class="flex items-center gap-2">
+                <i class="fa-solid fa-check text-brand-600"></i> Chỗ đỗ ưu tiên
+                (nếu có)
+              </li>
+            </ul>
+            <a
+              href="#contact"
+              class="block w-full py-3 text-center font-bold text-white bg-brand-600 rounded-xl hover:bg-brand-700 transition shadow-lg shadow-brand-600/30"
+            >
+              Đăng ký ngay
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="procedures" class="py-20 bg-slate-50 border-t border-slate-200">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-slate-900">Quy trình Đăng ký Vé tháng</h2>
+                <p class="text-slate-500 mt-2">Thủ tục đơn giản, nhanh chóng, nhận thẻ ngay.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition">
+                    <div class="absolute top-0 right-0 bg-slate-100 text-slate-400 font-bold text-4xl opacity-20 p-2 -mt-2 -mr-2 group-hover:text-brand-600 transition">01</div>
+                    <div class="w-12 h-12 bg-blue-100 text-brand-600 rounded-xl flex items-center justify-center text-xl mb-4">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800 mb-3">Chuẩn bị Giấy tờ</h3>
+                    <ul class="space-y-2 text-sm text-slate-600">
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-circle-check text-green-500 mt-1 text-xs"></i>
+                            <span><strong>CMND/CCCD:</strong> Bản gốc + 01 bản Photo.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-circle-check text-green-500 mt-1 text-xs"></i>
+                            <span><strong>Đăng ký xe (Cà vẹt):</strong> Bản gốc + 01 bản Photo.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-circle-check text-green-500 mt-1 text-xs"></i>
+                            <span><strong>Giấy phép lái xe/đăng kiểm/bảo hiểm lái xe:</strong> Bản gốc + 01 bản Photo </span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition">
+                    <div class="absolute top-0 right-0 bg-slate-100 text-slate-400 font-bold text-4xl opacity-20 p-2 -mt-2 -mr-2 group-hover:text-brand-600 transition">02</div>
+                    <div class="w-12 h-12 bg-blue-100 text-brand-600 rounded-xl flex items-center justify-center text-xl mb-4">
+                        <i class="fa-solid fa-building-user"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800 mb-3">Nộp hồ sơ tại VP</h3>
+                    <p class="text-sm text-slate-600 mb-4">Mang hồ sơ đến Phòng Quản lý Bãi xe (Cổng Parabol) trong giờ hành chính.</p>
+                    <div class="bg-yellow-50 border border-yellow-100 rounded-lg p-3">
+                        <p class="text-xs text-yellow-800 flex gap-2">
+                            <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+                            <span>Lưu ý: Ban quản lý sẽ <strong>đối chiếu bản gốc</strong> và chỉ <strong>thu giữ bản Photo</strong>.</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition">
+                    <div class="absolute top-0 right-0 bg-slate-100 text-slate-400 font-bold text-4xl opacity-20 p-2 -mt-2 -mr-2 group-hover:text-brand-600 transition">03</div>
+                    <div class="w-12 h-12 bg-blue-100 text-brand-600 rounded-xl flex items-center justify-center text-xl mb-4">
+                        <i class="fa-solid fa-id-card-clip"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800 mb-3">Nhận Thẻ & Kích hoạt</h3>
+                    <ul class="space-y-2 text-sm text-slate-600">
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-slate-400 mt-1 text-xs"></i>
+                            <span>Đóng phí tháng đầu tiên.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-slate-400 mt-1 text-xs"></i>
+                            <span>Chụp ảnh xe & Biển số để nhập liệu.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-slate-400 mt-1 text-xs"></i>
+                            <span>Nhận thẻ RFID và sử dụng ngay.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="contact" class="py-20 bg-slate-50">
+      <div class="container mx-auto px-6 max-w-5xl">
+        <div
+          class="bg-white rounded-3xl shadow-lg overflow-hidden grid grid-cols-1 lg:grid-cols-2"
+        >
+          <div
+            class="bg-brand-900 p-10 text-white flex flex-col justify-between relative overflow-hidden"
+          >
+            <div
+              class="absolute top-0 left-0 w-64 h-64 bg-brand-800 rounded-full mix-blend-multiply filter blur-3xl opacity-30 -translate-x-1/2 -translate-y-1/2"
+            ></div>
+
+            <div class="relative z-10">
+              <h3 class="text-2xl font-bold mb-6">Liên hệ Ban quản lý</h3>
+              <div class="space-y-6">
+                <div class="flex items-start gap-4">
+                  <div
+                    class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0"
+                  >
+                    <i class="fa-solid fa-location-dot"></i>
+                  </div>
+                  <div>
+                    <p class="font-semibold opacity-90">Địa chỉ</p>
+                    <p class="text-sm opacity-75">
+                      Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội (Cổng Parabol)
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-4">
+                  <div
+                    class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0"
+                  >
+                    <i class="fa-solid fa-phone"></i>
+                  </div>
+                  <div>
+                    <p class="font-semibold opacity-90">Hotline</p>
+                    <p class="text-sm opacity-75">0987.654.321 (Mr. Admin)</p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-4">
+                  <div
+                    class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0"
+                  >
+                    <i class="fa-regular fa-envelope"></i>
+                  </div>
+                  <div>
+                    <p class="font-semibold opacity-90">Email</p>
+                    <p class="text-sm opacity-75">support@hust-parking.com</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="relative z-10 mt-10">
+              <p class="text-xs opacity-50">© 2025 HUST Parking System</p>
+            </div>
+          </div>
+
+          <div class="p-10">
+            <h3 class="text-2xl font-bold text-slate-800 mb-2">
+              Đăng ký tư vấn Vé tháng
+            </h3>
+            <p class="text-slate-500 text-sm mb-8">
+              Để lại thông tin, chúng tôi sẽ liên hệ lại trong 24h.
+            </p>
+
+            <form
+              action="https://api.web3forms.com/submit"
+              method="POST"
+              class="space-y-5"
+            >
+              <input
+                type="hidden"
+                name="access_key"
+                value="YOUR_ACCESS_KEY_HERE"
+              />
+
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1"
+                  >Họ và tên</label
+                >
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  placeholder="Nguyễn Văn A"
+                  class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1"
+                  >Số điện thoại</label
+                >
+                <input
+                  type="tel"
+                  name="phone"
+                  required
+                  placeholder="09xx..."
+                  class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1"
+                  >Biển số xe (Dự kiến)</label
+                >
+                <input
+                  type="text"
+                  name="plate"
+                  placeholder="29A-123.45"
+                  class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition uppercase"
+                />
+              </div>
+
+              <button
+                type="submit"
+                class="w-full py-3 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition transform active:scale-95"
+              >
+                Gửi thông tin
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section
+      id="location"
+      class="h-80 w-full bg-slate-200 grayscale hover:grayscale-0 transition duration-700"
+    >
+      <iframe
+        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.636684849687!2d105.8415628153893!3d21.00720639388564!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135ac76ccab6dd7%3A0x55e92a5b07a97d03!2zxJDhuqFpIGjhu41jIELDoWNoIGtob2EgSMOgIE7hu5lp!5e0!3m2!1svi!2s!4v1646812345678!5m2!1svi!2s"
+        width="100%"
+        height="100%"
+        style="border: 0"
+        allowfullscreen=""
+        loading="lazy"
+      >
+      </iframe>
+    </section>
+
+    <script>
+      // --- CHẾ ĐỘ GIAO DIỆN DEMO (UI PROTOTYPE) ---
+      // Vì hệ thống lõi chạy trên mạng LAN (Localhost) để bảo mật,
+      // trang web này hiện tại chỉ dùng để minh họa giao diện người dùng.
+
+      const slotsEl = document.getElementById("slots-count");
+      const totalEl = document.getElementById("total-slots");
+      const updatedEl = document.getElementById("last-updated");
+      const loadingBar = document.getElementById("loading-bar");
+      const statusText = document.getElementById("status-text");
+
+      function initDemoInterface() {
+        // 1. Đặt một con số "đẹp" cố định (Ví dụ: còn 32 chỗ)
+        // Không dùng random để tránh việc số nhảy lung tung mà không có xe
+        const DEMO_SLOTS = 32; 
+        const TOTAL_SLOTS = 50;
+
+        slotsEl.innerText = DEMO_SLOTS;
+        totalEl.innerText = TOTAL_SLOTS;
+
+        // 2. Cập nhật giờ hiện tại (để thấy trang web vẫn "sống")
+        const now = new Date();
+        const timeString = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0') + " " + now.getDate() + "/" + (now.getMonth()+1);
+        updatedEl.innerText = timeString;
+
+        // 3. Ẩn thanh loading đi
+        if (loadingBar) {
+            loadingBar.style.opacity = "0";
         }
-    });
-</script>
-{% endblock %}
+        
+        // 4. (Tùy chọn) Thêm dòng chú thích nhỏ nếu bạn muốn cực kỳ an toàn
+        // updatedEl.innerText += " (Demo View)";
+      }
+
+      // Chạy một lần duy nhất khi tải trang
+      initDemoInterface();
+
+      // Chỉ cập nhật lại giờ sau mỗi phút (không thay đổi số chỗ)
+      setInterval(() => {
+        const now = new Date();
+        updatedEl.innerText = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0') + " " + now.getDate() + "/" + (now.getMonth()+1);
+      }, 60000);
+
+      // Animation keyframes (giữ nguyên để trang web đẹp)
+      const styleSheet = document.createElement("style");
+      styleSheet.innerText = `
+            @keyframes loading {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(300%); }
+            }
+        `;
+      document.head.appendChild(styleSheet);
+    </script>
+  </body>
+</html>
