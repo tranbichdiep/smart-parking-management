@@ -171,10 +171,9 @@ block extra_head %}
 
 <script>
   // Lấy dữ liệu từ Flask truyền sang
-  const dates = JSON.parse("{{ dates | safe }}");
-  const revenues = JSON.parse("{{ revenues | safe }}");
-  const traffics = JSON.parse("{{ traffics | safe }}");
-
+  const dates = {{ dates | safe }};
+  const revenues = {{ revenues | safe }};
+  const traffics = {{ traffics | safe }};
   // 1. Cấu hình Biểu đồ Doanh thu (Bar Chart)
   const ctxRev = document.getElementById("revenueChart").getContext("2d");
   new Chart(ctxRev, {
