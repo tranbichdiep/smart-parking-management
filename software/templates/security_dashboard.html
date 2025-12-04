@@ -1,5 +1,11 @@
 {% extends 'layout.html' %} {% block title %}Bảng điều khiển Vận hành{% endblock
-%} {% block content %}
+%} {% block extra_head %}
+<style>
+  [x-cloak] {
+    display: none !important;
+  }
+</style>
+{% endblock %} {% block content %}
 <div class="container mx-auto pb-12" x-data="parkingSystem()" x-init="init()">
   <div
     x-show="generalMessage"
@@ -23,58 +29,140 @@
     id="waiting-for-scan"
     x-show="currentState === 'waiting'"
     x-transition:enter.duration.500ms
+    class="mt-6 bg-white rounded-xl shadow-lg overflow-hidden"
   >
     <div
-      class="text-center p-10 border-2 border-dashed border-slate-300 rounded-xl bg-white shadow-sm relative"
+      class="bg-gradient-to-r from-slate-600 to-slate-700 p-4 text-white flex justify-between items-center"
     >
+      <h3 class="text-xl font-bold flex items-center gap-2">
+        <i class="fa-solid fa-video"></i> GIÁM SÁT CỔNG VÀO
+      </h3>
       <div
-        class="absolute top-4 right-4 flex items-center gap-2 text-sm"
-        :class="isPolling ? 'text-green-600' : 'text-red-500'"
+        class="flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full bg-black/20"
       >
         <template x-if="isPolling">
-          <span class="relative flex h-3 w-3"
-            ><span
+          <span class="relative flex h-3 w-3">
+            <span
               class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
-            ></span
-            ><span
+            ></span>
+            <span
               class="relative inline-flex rounded-full h-3 w-3 bg-green-500"
-            ></span
-          ></span>
+            ></span>
+          </span>
         </template>
-        <span x-text="isPolling ? 'Đang lắng nghe...' : 'Lỗi kết nối'"></span>
+        <span
+          x-text="isPolling ? 'Hệ thống đang hoạt động' : 'Mất kết nối server'"
+          :class="isPolling ? 'text-green-300' : 'text-red-300'"
+        ></span>
       </div>
-      <h2 class="text-2xl font-semibold text-slate-800">
-        Chờ quét thẻ từ cổng...
-      </h2>
-      <p class="mt-2 text-slate-500">
-        Hệ thống sẽ tự động hiển thị khi có xe vãng lai quét thẻ vào.
-      </p>
+    </div>
+
+    <div class="p-6 grid grid-cols-12 gap-6">
+      <div class="col-span-12 lg:col-span-8 space-y-4">
+        <div
+          class="border-2 border-slate-200 rounded-lg p-1 bg-slate-50 aspect-[4/3] overflow-hidden relative group shadow-inner"
+        >
+          <div
+            class="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1 z-10 opacity-80 group-hover:opacity-100 transition"
+          >
+            <span
+              class="animate-pulse w-2 h-2 bg-white rounded-full inline-block"
+            ></span>
+            LIVE VIEW
+          </div>
+          <img
+            src="{{ url_for('video_feed_in') }}"
+            alt="Video trực tiếp cổng vào đang tải..."
+            class="w-full h-full object-cover bg-slate-800 text-slate-300 rounded"
+            onerror="this.onerror=null; this.src='{{ url_for('static', filename='placeholder.jpg') }}'; this.parentElement.classList.add('border-red-500');"
+          />
+        </div>
+        <p class="text-sm text-slate-500 italic text-center">
+          <i class="fa-solid fa-info-circle"></i> Camera tự động hiển thị khi
+          tải trang.
+        </p>
+      </div>
+
+      <div class="col-span-12 lg:col-span-4 flex flex-col justify-center">
+        <div
+          class="text-center p-8 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50 h-full flex flex-col items-center justify-center gap-4"
+        >
+          <div
+            class="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100"
+          >
+            <i
+              class="fa-solid fa-id-card-clip text-4xl text-indigo-500 animate-pulse-slow"
+            ></i>
+          </div>
+          <div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">
+              Đang chờ quét thẻ...
+            </h2>
+            <p class="text-slate-500 text-sm px-4">
+              Vui lòng quét thẻ tại đầu đọc để thực hiện xe vào hoặc xe ra. Giao
+              diện sẽ tự động chuyển đổi.
+            </p>
+          </div>
+          <div class="mt-4">
+            <span
+              class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-indigo-500 bg-white border border-indigo-100 transition ease-in-out duration-150 cursor-not-allowed"
+            >
+              <svg
+                class="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              Đang lắng nghe tín hiệu...
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-
   <div
     id="check-in-section"
     x-show="currentState === 'checking_in'"
+    x-cloak
     x-transition:enter.duration.300ms
     class="mt-6 bg-white rounded-xl shadow-lg overflow-hidden"
   >
     <div class="bg-gradient-to-r from-green-500 to-emerald-600 p-4 text-white">
-      <!-- MỚI: Đổi tiêu đề dựa trên loại vé -->
-      <h3 class="text-2xl font-bold" x-text="checkoutData.ticket_type === 'monthly' ? 'GỬI XE - VÉ THÁNG' : 'GỬI XE - VÉ VÃNG LAI'">GỬI XE - NHẬN THÔNG TIN (VÃNG LAI)</h3>
+      <h3
+        class="text-2xl font-bold"
+        x-text="checkoutData.ticket_type === 'monthly' ? 'GỬI XE - VÉ THÁNG' : 'GỬI XE - VÉ VÃNG LAI'"
+      >
+        GỬI XE - NHẬN THÔNG TIN (VÃNG LAI)
+      </h3>
     </div>
     <div class="p-6 grid grid-cols-12 gap-6">
-      
       <div class="col-span-12 lg:col-span-7 space-y-4">
-        
-        <div class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden">
-          <img 
-            src="{{ url_for('video_feed_in') }}" 
+        <div
+          class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden"
+        >
+          <img
+            src="{{ url_for('video_feed_in') }}"
             alt="Video trực tiếp (Vào)"
             class="w-full h-full object-cover bg-black text-white rounded"
-          >
-          </div>
-
-        <div class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden">
+          />
+        </div>
+        <div
+          class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden"
+        >
           <img
             :src="snapshotUrl"
             class="rounded w-full h-full object-cover"
@@ -82,7 +170,6 @@
           />
         </div>
       </div>
-
       <div class="col-span-12 lg:col-span-5">
         <div class="h-full flex flex-col">
           <h4 class="text-base font-semibold mb-3 text-slate-800">
@@ -95,10 +182,12 @@
               <span class="font-medium text-slate-500">ID Thẻ:</span>
               <span class="font-mono" x-text="checkoutData.card_id"></span>
             </div>
-            <!-- MỚI: HIỂN THỊ TÊN CHỦ THẺ -->
             <div class="flex justify-between">
               <span class="font-medium text-slate-500">Chủ thẻ:</span>
-              <span class="font-semibold" x-text="checkoutData.holder_name"></span>
+              <span
+                class="font-semibold"
+                x-text="checkoutData.holder_name"
+              ></span>
             </div>
             <div>
               <label
@@ -106,7 +195,6 @@
                 class="block text-slate-500 font-medium mb-1"
                 >Biển số xe:</label
               >
-              <!-- MỚI: Tự điền biển số và vô hiệu hóa nếu là vé tháng -->
               <input
                 type="text"
                 id="license_plate_in"
@@ -134,7 +222,9 @@
               class="flex-1 py-2.5 text-sm font-semibold text-white rounded-md hover:bg-green-700 transition shadow"
               :class="checkoutData.ticket_type === 'monthly' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'"
             >
-              <span x-text="checkoutData.ticket_type === 'monthly' ? 'XÁC NHẬN VÉ THÁNG VÀO' : 'XÁC NHẬN VÀO'"></span>
+              <span
+                x-text="checkoutData.ticket_type === 'monthly' ? 'XÁC NHẬN VÉ THÁNG VÀO' : 'XÁC NHẬN VÀO'"
+              ></span>
             </button>
             <button
               @click="cancelPendingAction()"
@@ -151,6 +241,7 @@
   <div
     id="check-out-section"
     x-show="currentState === 'checking_out'"
+    x-cloak
     x-transition:enter.duration.300ms
     class="mt-6 bg-white rounded-xl shadow-lg overflow-hidden"
   >
@@ -158,18 +249,19 @@
       <h3 class="text-2xl font-bold">XE RA BÃI - XÁC NHẬN THANH TOÁN</h3>
     </div>
     <div class="p-6 grid grid-cols-12 gap-6">
-      
       <div class="col-span-12 lg:col-span-7 space-y-4">
-        
-        <div class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden">
-           <img 
-            src="{{ url_for('video_feed_out') }}" 
+        <div
+          class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden"
+        >
+          <img
+            src="{{ url_for('video_feed_out') }}"
             alt="Video trực tiếp (Ra)"
             class="w-full h-full object-cover bg-black text-white rounded"
-          >
-          </div>
-
-        <div class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden flex flex-col">
+          />
+        </div>
+        <div
+          class="border rounded-lg p-2 bg-slate-50 aspect-[4/3] overflow-hidden flex flex-col"
+        >
           <div class="text-sm font-semibold text-center mb-1 text-slate-600">
             ẢNH LÚC VÀO ĐỂ ĐỐI CHIẾU
           </div>
@@ -190,38 +282,39 @@
             class="space-y-2 text-slate-700 text-sm p-4 bg-slate-50/50 rounded-lg border"
           >
             <div class="flex justify-between">
-              <span class="font-medium text-slate-500">Biển số xe:</span>
-              <span
+              <span class="font-medium text-slate-500">Biển số xe:</span
+              ><span
                 class="font-mono font-semibold text-slate-800"
                 x-text="checkoutData.license_plate"
               ></span>
             </div>
             <div class="flex justify-between">
-              <span class="font-medium text-slate-500">ID Thẻ:</span>
-              <span class="font-mono" x-text="checkoutData.card_id"></span>
+              <span class="font-medium text-slate-500">ID Thẻ:</span
+              ><span class="font-mono" x-text="checkoutData.card_id"></span>
             </div>
             <hr class="my-2 border-dashed" />
             <div class="flex justify-between">
-              <span class="font-medium text-slate-500">Vào bãi:</span>
-              <span
+              <span class="font-medium text-slate-500">Vào bãi:</span
+              ><span
                 class="text-slate-600"
                 x-text="checkoutData.entry_time"
               ></span>
             </div>
             <div class="flex justify-between">
-              <span class="font-medium text-slate-500">Ra bãi:</span>
-              <span
+              <span class="font-medium text-slate-500">Ra bãi:</span
+              ><span
                 class="text-slate-600"
                 x-text="checkoutData.exit_time"
               ></span>
             </div>
             <div class="flex justify-between">
-              <span class="font-medium text-slate-500">Tổng thời gian:</span>
-              <span class="font-semibold" x-text="checkoutData.duration"></span>
+              <span class="font-medium text-slate-500">Tổng thời gian:</span
+              ><span
+                class="font-semibold"
+                x-text="checkoutData.duration"
+              ></span>
             </div>
           </div>
-
-          <!-- MỚI: ẨN/HIỆN PHÍ CHO VÉ THÁNG -->
           <div
             x-show="checkoutData.fee > 0"
             class="mt-3 p-4 text-center bg-red-50 rounded-lg border border-red-200"
@@ -232,11 +325,12 @@
               TỔNG TIỀN (VÃNG LAI)
             </p>
             <p class="text-4xl font-extrabold text-red-600 tracking-tight my-1">
-              <span x-text="(checkoutData.fee || 0).toLocaleString('vi-VN')"></span>
-              <span class="text-2xl font-semibold">VNĐ</span>
+              <span
+                x-text="(checkoutData.fee || 0).toLocaleString('vi-VN')"
+              ></span
+              ><span class="text-2xl font-semibold">VNĐ</span>
             </p>
           </div>
-
           <div
             x-show="checkoutData.fee === 0"
             class="mt-3 p-4 text-center bg-blue-50 rounded-lg border border-blue-200"
@@ -250,15 +344,14 @@
               KHÔNG THU PHÍ
             </p>
           </div>
-          <!-- KẾT THÚC THAY ĐỔI -->
-
           <div class="mt-3 flex items-center gap-3">
             <button
               @click="confirmPendingExit()"
               class="flex-1 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition shadow"
             >
-              <!-- MỚI: THAY ĐỔI TEXT NÚT BẤM -->
-              <span x-text="checkoutData.fee > 0 ? 'XÁC NHẬN THU TIỀN' : 'XÁC NHẬN XE RA (VÉ THÁNG)'"></span>
+              <span
+                x-text="checkoutData.fee > 0 ? 'XÁC NHẬN THU TIỀN' : 'XÁC NHẬN XE RA (VÉ THÁNG)'"
+              ></span>
             </button>
             <button
               @click="cancelPendingAction()"
@@ -275,24 +368,21 @@
 
 <script>
   function parkingSystem() {
+    // ... (Giữ nguyên toàn bộ nội dung script) ...
     return {
-      // STATE MANAGEMENT
-      currentState: "waiting", // 'waiting', 'checking_in', 'checking_out'
-      isPolling: false, // Trạng thái lắng nghe
+      currentState: "waiting",
+      isPolling: false,
       pollInterval: null,
       generalMessage: "",
       messageType: "info",
       messageTimer: null,
       messageProgress: 100,
-
-      // DATA
       licensePlate: "",
       snapshotUrl: "{{ url_for('static', filename='placeholder.jpg') }}",
       checkoutData: {
         poll_id: null,
         card_id: null,
         entry_time: null,
-        // Thêm các trường cho xe ra
         action_type: null,
         transaction_id: null,
         license_plate: null,
@@ -300,52 +390,47 @@
         duration: null,
         fee: 0,
         entry_snapshot_url: null,
-        // --- MỚI: Thêm 2 trường ---
-        holder_name: 'Khách vãng lai',
-        ticket_type: 'daily' 
+        holder_name: "Khách vãng lai",
+        ticket_type: "daily",
       },
-
-      // --- CORE METHODS ---
       init() {
         this.startPolling();
       },
-
       startPolling() {
         if (this.pollInterval) clearInterval(this.pollInterval);
         this.isPolling = true;
-        // Bắt đầu lắng nghe ngay
-        this.fetchPendingScan(); 
-        
-        // Thiết lập vòng lặp
+        this.fetchPendingScan();
         this.pollInterval = setInterval(() => {
-          // Chỉ fetch khi đang ở màn hình chờ
-          if (this.currentState === 'waiting') {
+          if (this.currentState === "waiting") {
             this.fetchPendingScan();
           }
-        }, 2000); // Lắng nghe mỗi 2 giây
+        }, 2000);
       },
-
       stopPolling() {
         if (this.pollInterval) clearInterval(this.pollInterval);
         this.isPolling = false;
       },
-
       resetView() {
         this.currentState = "waiting";
         this.licensePlate = "";
-        this.snapshotUrl = "{{ url_for('static', filename='placeholder.jpg') }}";
-        // --- MỚI: Reset cả 2 trường mới ---
-        this.checkoutData = { 
-            poll_id: null, card_id: null, entry_time: null, fee: 0, 
-            transaction_id: null, license_plate: null, exit_time: null,
-            duration: null, entry_snapshot_url: null,
-            holder_name: 'Khách vãng lai', ticket_type: 'daily' 
+        this.snapshotUrl =
+          "{{ url_for('static', filename='placeholder.jpg') }}";
+        this.checkoutData = {
+          poll_id: null,
+          card_id: null,
+          entry_time: null,
+          fee: 0,
+          transaction_id: null,
+          license_plate: null,
+          exit_time: null,
+          duration: null,
+          entry_snapshot_url: null,
+          holder_name: "Khách vãng lai",
+          ticket_type: "daily",
         };
-        this.startPolling(); // Bắt đầu lắng nghe lại
+        this.startPolling();
       },
-
       displayMessage(message, type = "info", duration = 4000) {
-        // (Hàm này giữ nguyên, không thay đổi)
         this.generalMessage = message;
         this.messageType = type;
         this.messageProgress = 100;
@@ -364,70 +449,57 @@
           }, interval);
         }
       },
-
-      // --- LOGIC NGHIỆP VỤ MỚI ---
-      
       async fetchPendingScan() {
         try {
           const response = await fetch("/api/gate/get_pending_scans");
-          
           if (!response.ok) {
-             throw new Error("Server error");
+            throw new Error("Server error");
           }
-
           const result = await response.json();
-          this.isPolling = true; // Kết nối thành công
-
+          this.isPolling = true;
           if (result && result.card_id) {
-            // TÌM THẤY YÊU CẦU!
-            this.stopPolling(); // Dừng lắng nghe
-            
-            // Đổ dữ liệu vào
+            this.stopPolling();
             this.checkoutData = result;
-            
-            if (result.action_type === 'entry') {
-                // --- THAY ĐỔI: Gán dữ liệu mới ---
-                this.licensePlate = result.license_plate || ""; // Tự điền nếu là vé tháng
-                this.checkoutData.holder_name = result.holder_name || "Khách vãng lai";
-                this.checkoutData.ticket_type = result.ticket_type || "daily";
-                // --- KẾT THÚC THAY ĐỔI ---
-
-                this.displayMessage(`Thẻ vào ${result.card_id} đang chờ!`, "info");
-                this.currentState = 'checking_in'; // Chuyển giao diện VÀO
-                setTimeout(() => {
-                    const plateInput = document.getElementById("license_plate_in");
-                    if(plateInput) {
-                        plateInput.focus();
-                        // Chỉ bôi đen text nếu là vãng lai (để nhập đè)
-                        if(this.checkoutData.ticket_type === 'daily') {
-                            plateInput.select();
-                        }
-                    }
-                }, 100);
-            } 
-            else if (result.action_type === 'exit') {
-                this.displayMessage(`Thẻ ra ${result.card_id} chờ thu phí!`, "info");
-                this.currentState = 'checking_out'; // Chuyển giao diện RA
+            if (result.action_type === "entry") {
+              this.licensePlate = result.license_plate || "";
+              this.checkoutData.holder_name =
+                result.holder_name || "Khách vãng lai";
+              this.checkoutData.ticket_type = result.ticket_type || "daily";
+              this.displayMessage(
+                `Thẻ vào ${result.card_id} đang chờ!`,
+                "info"
+              );
+              this.currentState = "checking_in";
+              setTimeout(() => {
+                const plateInput = document.getElementById("license_plate_in");
+                if (plateInput) {
+                  plateInput.focus();
+                  if (this.checkoutData.ticket_type === "daily") {
+                    plateInput.select();
+                  }
+                }
+              }, 100);
+            } else if (result.action_type === "exit") {
+              this.displayMessage(
+                `Thẻ ra ${result.card_id} chờ thu phí!`,
+                "info"
+              );
+              this.currentState = "checking_out";
             }
           }
-          // Nếu không có gì (result = null), không làm gì cả, chờ lần poll sau
-
         } catch (error) {
           console.error("Lỗi Polling:", error);
-          this.isPolling = false; // Mất kết nối
+          this.isPolling = false;
           this.displayMessage("Lỗi kết nối khi lắng nghe cổng!", "error", 2000);
           this.stopPolling();
-          // Thử kết nối lại sau 5s
           setTimeout(() => this.startPolling(), 5000);
         }
       },
-
       async confirmPendingEntry() {
         if (!this.licensePlate.trim()) {
           alert("Vui lòng nhập biển số xe.");
           return;
         }
-
         try {
           const response = await fetch("/api/confirm_pending_entry", {
             method: "POST",
@@ -438,11 +510,10 @@
               license_plate: this.licensePlate.toString().toUpperCase(),
             }),
           });
-          
           const result = await response.json();
           if (response.ok) {
             this.displayMessage(result.message, "success");
-            this.resetView(); // Quay về màn hình chờ
+            this.resetView();
           } else {
             this.displayMessage(result.message || "Lỗi khi xác nhận.", "error");
           }
@@ -450,26 +521,22 @@
           this.displayMessage("Lỗi kết nối server khi xác nhận vào.", "error");
         }
       },
-
       async cancelPendingAction() {
         if (!confirm("Bạn có chắc muốn HỦY yêu cầu này? ESP32 sẽ báo lỗi.")) {
-            return;
+          return;
         }
         try {
           await fetch("/api/cancel_pending_action", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              poll_id: this.checkoutData.poll_id
-            }),
+            body: JSON.stringify({ poll_id: this.checkoutData.poll_id }),
           });
           this.displayMessage("Đã hủy yêu cầu.", "info");
-          this.resetView(); // Quay về màn hình chờ
+          this.resetView();
         } catch (error) {
           this.displayMessage("Lỗi khi hủy yêu cầu.", "error");
         }
       },
-
       async confirmPendingExit() {
         try {
           const response = await fetch("/api/confirm_pending_exit", {
@@ -478,7 +545,7 @@
             body: JSON.stringify({
               poll_id: this.checkoutData.poll_id,
               transaction_id: this.checkoutData.transaction_id,
-              fee: this.checkoutData.fee
+              fee: this.checkoutData.fee,
             }),
           });
           const result = await response.json();
@@ -486,13 +553,15 @@
             this.displayMessage(result.message, "success");
             this.resetView();
           } else {
-            this.displayMessage(result.message || "Lỗi khi xác nhận thanh toán.", "error");
+            this.displayMessage(
+              result.message || "Lỗi khi xác nhận thanh toán.",
+              "error"
+            );
           }
         } catch (error) {
           this.displayMessage("Lỗi kết nối server khi xác nhận ra.", "error");
         }
-      }
-
+      },
     };
   }
 </script>
