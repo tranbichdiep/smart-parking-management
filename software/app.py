@@ -25,10 +25,9 @@ os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 DEVICE_SECRET_TOKEN = "my_secret_device_token_12345"
 
 # *** MỚI: Cấu hình 2 Camera RTSP ***
-RTSP_URL_IN = "rtsp://admin:admin@192.168.0.104:8554/live"
+# Lưu ý: Thay đổi URL này phù hợp với camera thực tế của bạn
+RTSP_URL_IN = "rtsp://admin:admin@192.168.0.101:8554/live"
 RTSP_URL_OUT = "rtsp://admin:admin@192.168.0.103:8554/live"
-# RTSP_URL_IN = "rtsp://admin:admin@ace-3v-4t3kx75a.local:8554/live"
-# RTSP_URL_OUT = "rtsp://admin:admin@spid3r-tab.local:8554/live"
 
 @app.template_filter('vn_dt')
 def vn_dt(value, fmt="%d/%m/%Y %H:%M:%S"):
@@ -143,16 +142,13 @@ def login():
         username = request.form['username']
         password = request.form['password']
         conn = get_db_connection()
-        # Lấy thêm cột status
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         conn.close()
         
         if user and check_password_hash(user['password_hash'], password):
-            # --- MỚI: Kiểm tra trạng thái ---
             if user['status'] == 'locked':
                 flash('Tài khoản này đã bị KHÓA. Vui lòng liên hệ Admin.', 'danger')
                 return render_template('login.html')
-            # --------------------------------
             
             session['logged_in'] = True
             session['username'] = user['username']
@@ -194,7 +190,6 @@ def admin_dashboard():
 @role_required('admin')
 def user_management():
     conn = get_db_connection()
-    # MỚI: Lấy thêm cột status
     users = conn.execute('SELECT username, role, status FROM users').fetchall()
     conn.close()
     return render_template('user_management.html', users=users)
@@ -206,7 +201,7 @@ def add_user():
     username = request.form['username'].strip()
     password = request.form['password']
     role = request.form['role']
-    status = request.form.get('status', 'active') # MỚI: Lấy status từ form
+    status = request.form.get('status', 'active') 
     
     if not username or not password:
         flash('Vui lòng nhập đầy đủ thông tin!', 'danger')
@@ -216,7 +211,6 @@ def add_user():
     
     conn = get_db_connection()
     try:
-        # MỚI: Insert thêm cột status
         conn.execute(
             'INSERT INTO users (username, password_hash, role, status) VALUES (?, ?, ?, ?)',
             (username, hashed_password, role, status)
@@ -233,7 +227,6 @@ def add_user():
 @login_required
 @role_required('admin')
 def delete_user(username):
-    # Không cho phép xóa chính mình
     if username == session['username']:
         flash('Bạn không thể xóa tài khoản đang đăng nhập!', 'danger')
         return redirect(url_for('user_management'))
@@ -257,7 +250,6 @@ def toggle_user_status(username):
     user = conn.execute('SELECT status FROM users WHERE username = ?', (username,)).fetchone()
     
     if user:
-        # Đảo ngược trạng thái: active <-> locked
         new_status = 'locked' if user['status'] == 'active' else 'active'
         conn.execute('UPDATE users SET status = ? WHERE username = ?', (new_status, username))
         conn.commit()
@@ -354,15 +346,12 @@ def settings():
     settings_dict = {row['key']: row['value'] for row in settings_data}
     return render_template('settings.html', settings=settings_dict)
 
-# [Trong file software/app.py]
-
 @app.route('/admin/statistics')
 @login_required
 @role_required('admin')
 def statistics():
     conn = get_db_connection()
     
-    # --- 1. Thống kê tổng quan (Hôm nay) - GIỮ NGUYÊN ---
     today_str = datetime.now().strftime("%Y-%m-%d")
     
     revenue_today = conn.execute(
@@ -379,45 +368,33 @@ def statistics():
         "SELECT COUNT(*) FROM transactions WHERE exit_time IS NULL"
     ).fetchone()[0] or 0
 
-    # --- 2. Xử lý Lọc dữ liệu Biểu đồ ---
-    
-    # Lấy tham số từ URL
-    filter_type = request.args.get('filter', '7days') # Mặc định là 7 ngày
+    filter_type = request.args.get('filter', '7days') 
     start_input = request.args.get('start', '')
     end_input = request.args.get('end', '')
 
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=6) # Mặc định 7 ngày (0->6)
+    start_date = end_date - timedelta(days=6) 
 
-    # Logic xác định khoảng thời gian
     if filter_type == '6months':
-        # Lấy 180 ngày gần nhất
         start_date = end_date - timedelta(days=180)
     elif filter_type == 'custom' and start_input and end_input:
         try:
             start_date = datetime.strptime(start_input, "%Y-%m-%d")
-            # Set end_date là cuối ngày đó (23:59:59) để query đúng
             end_date = datetime.strptime(end_input, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
         except ValueError:
-            pass # Nếu lỗi format thì giữ mặc định
+            pass 
 
-    # Tạo danh sách các ngày trong khoảng (trục hoành X)
     date_labels = []
     delta = (end_date - start_date).days
-    # Đảm bảo ít nhất 1 ngày
     if delta < 0: delta = 0
     
     for i in range(delta + 1):
         day = start_date + timedelta(days=i)
         date_labels.append(day.strftime("%Y-%m-%d"))
 
-    # --- 3. Truy vấn dữ liệu (Tối ưu hóa dùng GROUP BY) ---
-    
-    # Format lại để query SQL
     s_str = start_date.strftime("%Y-%m-%d 00:00:00")
     e_str = end_date.strftime("%Y-%m-%d 23:59:59")
 
-    # Query Doanh thu (theo ngày ra)
     rev_data = conn.execute("""
         SELECT date(exit_time) as day, SUM(fee) as total 
         FROM transactions 
@@ -425,7 +402,6 @@ def statistics():
         GROUP BY date(exit_time)
     """, (s_str, e_str)).fetchall()
     
-    # Query Lưu lượng (theo ngày vào)
     traf_data = conn.execute("""
         SELECT date(entry_time) as day, COUNT(*) as total 
         FROM transactions 
@@ -435,21 +411,17 @@ def statistics():
     
     conn.close()
 
-    # --- 4. Map dữ liệu SQL vào danh sách ngày liên tục ---
-    # Chuyển list SQL thành dictionary để tra cứu nhanh: {'2023-10-25': 50000, ...}
     rev_dict = {row['day']: row['total'] for row in rev_data}
     traf_dict = {row['day']: row['total'] for row in traf_data}
 
-    final_dates = []   # Label hiển thị (dd/mm)
+    final_dates = []   
     final_revenues = []
     final_traffics = []
 
     for d_str in date_labels:
-        # Tạo label đẹp (dd/mm)
         d_obj = datetime.strptime(d_str, "%Y-%m-%d")
         final_dates.append(d_obj.strftime("%d/%m"))
         
-        # Lấy dữ liệu, nếu không có thì bằng 0
         final_revenues.append(rev_dict.get(d_str, 0))
         final_traffics.append(traf_dict.get(d_str, 0))
 
@@ -460,10 +432,10 @@ def statistics():
                            dates=json.dumps(final_dates),
                            revenues=json.dumps(final_revenues),
                            traffics=json.dumps(final_traffics),
-                           # Truyền lại để hiển thị trên giao diện
                            current_filter=filter_type,
                            current_start=start_date.strftime("%Y-%m-%d"),
                            current_end=end_date.strftime("%Y-%m-%d"))
+
 # ======================================================
 # --- TRANG BẢO VỆ (SECURITY DASHBOARD) ---
 # ======================================================
@@ -472,7 +444,6 @@ def statistics():
 @login_required
 @role_required('security')
 def security_dashboard():
-    # Trang này giờ chỉ là vỏ HTML, logic được JS xử lý qua API
     return render_template('security_dashboard.html')
 
 # ======================================================
@@ -483,27 +454,41 @@ def security_dashboard():
 @login_required
 @role_required('security')
 def get_pending_scans():
-    """API này được dashboard của bảo vệ gọi liên tục (poll) để tìm xe (vào VÀ ra) chờ duyệt."""
+    """API Polling: Trả về xe chờ duyệt HOẶC cảnh báo thẻ lạ."""
     conn = get_db_connection()
     
-    # Xóa các yêu cầu quá 2 phút (để tránh kẹt)
+    # 1. Dọn dẹp các yêu cầu cũ quá 2 phút
     two_min_ago = (datetime.now() - timedelta(minutes=2)).strftime("%Y-%m-%d %H:%M:%S")
-    conn.execute("DELETE FROM pending_actions WHERE status = 'pending' AND created_at < ?", (two_min_ago,))
+    conn.execute("DELETE FROM pending_actions WHERE status IN ('pending', 'alert_unregistered') AND created_at < ?", (two_min_ago,))
     conn.commit()
 
-    # Lấy yêu cầu cũ nhất
+    # 2. Lấy yêu cầu mới nhất (bao gồm cả 'pending' VÀ 'alert_unregistered')
     pending = conn.execute(
-        "SELECT * FROM pending_actions WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1"
+        "SELECT * FROM pending_actions WHERE status IN ('pending', 'alert_unregistered') ORDER BY created_at ASC LIMIT 1"
     ).fetchone()
     
     if pending:
-        # Đánh dấu là 'processing' để không bị lấy lại
+        # === TRƯỜNG HỢP 1: CẢNH BÁO THẺ LẠ ===
+        if pending['status'] == 'alert_unregistered':
+            # Xóa ngay bản ghi này để không báo lại liên tục
+            conn.execute("DELETE FROM pending_actions WHERE id = ?", (pending['id'],))
+            conn.commit()
+            conn.close()
+            
+            # Trả về JSON đặc biệt loại 'alert'
+            return jsonify({
+                "action_type": "alert",
+                "card_id": pending['card_id'],
+                "message": f"CẢNH BÁO: Phát hiện thẻ lạ {pending['card_id']}!"
+            })
+
+        # === TRƯỜNG HỢP 2: XE CHỜ DUYỆT (Bình thường) ===
+        # Đánh dấu 'processing' để không bị lấy lặp lại
         conn.execute("UPDATE pending_actions SET status = 'processing' WHERE id = ?", (pending['id'],))
         conn.commit()
 
-        # Trả về một object đầy đủ, tùy thuộc vào 'entry' hay 'exit'
         if pending['action_type'] == 'entry':
-            # --- THAY ĐỔI: Lấy thông tin thẻ (nếu có) ---
+            # Lấy thông tin bổ sung từ thẻ
             card_info = conn.execute("SELECT holder_name, license_plate, ticket_type FROM cards WHERE card_id = ?", (pending['card_id'],)).fetchone()
             
             holder_name = "Khách vãng lai"
@@ -515,24 +500,23 @@ def get_pending_scans():
                 license_plate = card_info['license_plate']
                 ticket_type = card_info['ticket_type']
             
-            conn.close() # <-- ĐÓNG KẾT NỐI
+            conn.close()
             return jsonify({
                 "poll_id": pending['id'],
                 "action_type": "entry",
                 "card_id": pending['card_id'],
                 "entry_time": datetime.strptime(pending['created_at'], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M:%S"),
-                # --- DỮ LIỆU MỚI ĐỂ HIỂN THỊ CHO BẢO VỆ ---
                 "holder_name": holder_name,
                 "license_plate": license_plate,
                 "ticket_type": ticket_type
             })
+
         elif pending['action_type'] == 'exit':
-             # Tìm ảnh vào
+            # Tìm ảnh lúc vào để đối chiếu
             entry_snapshot = conn.execute('SELECT entry_snapshot FROM transactions WHERE id = ?', (pending['transaction_id'],)).fetchone()
             entry_snapshot_url = f"/static/snapshots/{entry_snapshot['entry_snapshot']}" if entry_snapshot and entry_snapshot['entry_snapshot'] else url_for('static', filename='placeholder.jpg')
             
-            conn.close() # <-- VÀ THÊM DÒNG ĐÓNG Ở ĐÂY
-            
+            conn.close()
             return jsonify({
                 "poll_id": pending['id'],
                 "action_type": "exit",
@@ -545,9 +529,9 @@ def get_pending_scans():
                 "fee": pending['fee'],
                 "entry_snapshot_url": entry_snapshot_url
             })
-    else:
-        conn.close()
-        return jsonify(None) # Không có gì
+            
+    conn.close()
+    return jsonify(None) # Không có gì mới
 
 @app.route('/api/confirm_pending_entry', methods=['POST'])
 @login_required
@@ -564,7 +548,7 @@ def confirm_pending_entry():
         entry_snapshot_filename = capture_snapshot(card_id, 'in')
         entry_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Tạo thẻ vãng lai nếu chưa có
+        # Tạo thẻ vãng lai nếu chưa có (Với logic mới, đoạn này ít khi chạy nhưng cứ để phòng hờ)
         card_info = conn.execute('SELECT * FROM cards WHERE card_id = ?', (card_id,)).fetchone()
         if not card_info:
              conn.execute(
@@ -645,8 +629,8 @@ def confirm_pending_exit():
 @app.route('/api/gate/device_scan', methods=['POST'])
 def device_scan():
     """
-    Đây là API DUY NHẤT mà ESP32 gọi khi quét thẻ.
-    Nó xử lý cả logic VÀO và RA.
+    API xử lý quẹt thẻ từ ESP32.
+    CẬP NHẬT: Ghi log 'alert_unregistered' vào DB để báo lên Web nếu thẻ lạ.
     """
     conn = None
     try:
@@ -663,30 +647,49 @@ def device_scan():
             return jsonify({"action": "wait", "message": "Missing card_id"}), 400
 
         conn = get_db_connection()
-        
-        # 2. Kiểm tra thẻ đang ở trong hay ngoài
+
+        # ==================================================================
+        # [QUAN TRỌNG] KIỂM TRA THẺ CÓ TRONG HỆ THỐNG KHÔNG?
+        # ==================================================================
+        card_info = conn.execute('SELECT * FROM cards WHERE card_id = ?', (card_id,)).fetchone()
+
+        if not card_info:
+            # === NẾU THẺ LẠ: GHI CẢNH BÁO VÀO DB ĐỂ WEB HIỂN THỊ ===
+            try:
+                conn.execute(
+                    "INSERT INTO pending_actions (card_id, status, action_type, created_at) VALUES (?, ?, ?, ?)",
+                    (card_id, 'alert_unregistered', 'alert', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Lỗi ghi alert: {e}")
+
+            conn.close()
+            print(f"🚫 Đã chặn thẻ lạ: {card_id} (Đã gửi cảnh báo lên Web)")
+            
+            # Trả về 'wait' để ESP32 báo lỗi đèn đỏ/còi
+            return jsonify({
+                "action": "wait", 
+                "message": "Thẻ không thuộc bãi xe"
+            })
+        # ==================================================================
+
+        # 2. Kiểm tra thẻ đang ở trong hay ngoài (để xác định là Vào hay Ra)
         active_transaction = conn.execute(
             'SELECT * FROM transactions WHERE card_id = ? AND exit_time IS NULL', (card_id,)
         ).fetchone()
             
-        card_info = conn.execute('SELECT * FROM cards WHERE card_id = ?', (card_id,)).fetchone()
-        
-        # === CASE 1: XE RA (Đã có active_transaction) ===
+        # === CASE 1: XE RA (Đã có giao dịch vào chưa kết thúc) ===
         if active_transaction:
             exit_time_dt = datetime.now()
+            card_type = card_info['ticket_type'] # Lấy thông tin loại vé
             
-            # --- LOGIC MỚI: TẤT CẢ XE RA ĐỀU PHẢI CHỜ DUYỆT (THEO YÊU CẦU MỚI) ---
-            
-            fee = 0 # Mặc định là 0 (cho thẻ tháng)
-            card_type = 'daily' # Mặc định
-            if card_info:
-                card_type = card_info['ticket_type']
-            
-            # Tính toán thời gian (dùng chung cho cả 2 loại thẻ)
+            # Tính toán thời gian
             entry_time_dt = datetime.strptime(active_transaction['entry_time'], "%Y-%m-%d %H:%M:%S")
             duration = exit_time_dt - entry_time_dt
 
-            # Nếu là thẻ vãng lai, TÍNH PHÍ
+            # Tính phí (Chỉ tính nếu là vé ngày - daily)
+            fee = 0
             if card_type == 'daily':
                 settings_data = conn.execute('SELECT * FROM settings').fetchall()
                 settings = {row['key']: row['value'] for row in settings_data}
@@ -695,28 +698,23 @@ def device_scan():
                 hours = max(1, -(-duration.total_seconds() // 3600)) 
                 fee = int(hours * fee_per_hour)
             
-            # (Else: card_type == 'monthly', fee vẫn là 0)
-
-            # Tạo yêu cầu 'exit' cho CẢ HAI LOẠI THẺ
+            # Tạo yêu cầu 'exit'
             pending = conn.execute(
                 """INSERT INTO pending_actions 
                    (card_id, status, action_type, created_at, transaction_id, license_plate, entry_time, duration, fee) 
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (card_id, 'pending', 'exit', exit_time_dt.strftime("%Y-%m-%d %H:%M:%S"), 
                  active_transaction['id'], active_transaction['license_plate'], 
-                 active_transaction['entry_time'], str(duration).split('.')[0], fee) # fee sẽ là 0 nếu là thẻ tháng
+                 active_transaction['entry_time'], str(duration).split('.')[0], fee)
             )
             conn.commit()
             poll_id = pending.lastrowid
             conn.close()
-            # Luôn yêu cầu ESP32 poll
             return jsonify({'action': 'poll', 'poll_id': poll_id, 'message': 'Xe ra, chờ bảo vệ...'})
 
-        # === CASE 2: XE VÀO (Không có active_transaction) ===
+        # === CASE 2: XE VÀO (Chưa có giao dịch active) ===
         else:
-            # --- LOGIC MỚI: TẤT CẢ XE VÀO ĐỀU PHẢI CHỜ DUYỆT (THEO YÊU CẦU MỚI) ---
-            
-            # Tạo một yêu cầu trong bảng pending_actions
+            # Tạo yêu cầu 'entry'
             pending = conn.execute(
                 "INSERT INTO pending_actions (card_id, status, action_type, created_at) VALUES (?, ?, ?, ?)",
                 (card_id, 'pending', 'entry', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -724,14 +722,13 @@ def device_scan():
             conn.commit()
             poll_id = pending.lastrowid
             conn.close()
-            # Luôn yêu cầu ESP32 poll
             return jsonify({'action': 'poll', 'poll_id': poll_id, 'message': 'Chờ bảo vệ duyệt...'})
 
     except Exception as e:
         if conn:
             conn.close()
         print(f"Lỗi tại /api/gate/device_scan: {e}")
-        return jsonify({"action": "wait", "message": "Lỗi máy chủ nội bộ."}), 500
+        return jsonify({"action": "wait", "message": "Lỗi server"}), 500
 
 
 @app.route('/api/gate/check_action_status', methods=['GET'])
@@ -746,7 +743,7 @@ def check_action_status():
     
     if not action:
         conn.close()
-        return jsonify({"status": "denied"}) # Bị timeout hoặc hủy
+        return jsonify({"status": "denied"}) 
 
     status = action['status']
     
@@ -756,18 +753,14 @@ def check_action_status():
         conn.commit()
         
     conn.close()
-    return jsonify({"status": status}) # Trả về 'pending', 'approved', hoặc 'denied'
+    return jsonify({"status": status}) 
 
 
 # ======================================================
-# --- MỚI: API TRUYỀN VIDEO CHO WEB (ĐÃ TÁI CẤU TRÚC) ---
+# --- API TRUYỀN VIDEO CHO WEB ---
 # ======================================================
 
 def generate_frames(rtsp_url):
-    """
-    Generator đọc frame từ camera (theo rtsp_url) và trả về dưới dạng MJPEG.
-    Hàm này có thể tái sử dụng cho cả camera VÀO và RA.
-    """
     cap = None
     while True:
         try:
@@ -783,31 +776,26 @@ def generate_frames(rtsp_url):
                 print(f"Mất kết nối {rtsp_url}. Đang thử kết nối lại...")
                 cap.release()
                 cap = None
-                time.sleep(2) # Chờ 2 giây trước khi thử lại
+                time.sleep(2) 
                 continue
 
-            # Resize frame để giảm băng thông (TÙY CHỌN)
             frame_resized = cv2.resize(frame, (640, 480))
-
-            # Encode thành JPEG
             (flag, encodedImage) = cv2.imencode(".jpg", frame_resized)
             if not flag:
                 continue
 
-            # Trả về frame
             yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + 
                   bytearray(encodedImage) + b'\r\n')
         
         except ConnectionError as e:
             print(e)
-            # Tạo frame báo lỗi
             error_frame = cv2.vconcat([cv2.vconcat([cv2.Mat(480, 640, cv2.CV_8UC3, (50, 50, 50))])])
             cv2.putText(error_frame, 'CAMERA OFFLINE', (180, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             (flag, encodedImage) = cv2.imencode(".jpg", error_frame)
             if flag:
                 yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + 
                       bytearray(encodedImage) + b'\r\n')
-            time.sleep(5) # Chờ 5 giây nếu lỗi
+            time.sleep(5) 
         
         except Exception as e:
             print(f"Lỗi không xác định trong generate_frames ({rtsp_url}): {e}")
@@ -819,19 +807,15 @@ def generate_frames(rtsp_url):
 @app.route('/video_feed_in')
 @login_required
 def video_feed_in():
-    """Route cho video camera VÀO."""
     return Response(generate_frames(RTSP_URL_IN),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/video_feed_out')
 @login_required
 def video_feed_out():
-    """Route cho video camera RA."""
     return Response(generate_frames(RTSP_URL_OUT),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
-# --- Chạy ứng dụng ---
 if __name__ == '__main__':
-    # Chạy trên tất cả IP, debug=False để OpenCV chạy ổn định trên nhiều thread
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
