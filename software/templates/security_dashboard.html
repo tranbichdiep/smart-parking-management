@@ -368,7 +368,6 @@
 
 <script>
   function parkingSystem() {
-    // ... (Giữ nguyên toàn bộ nội dung script) ...
     return {
       currentState: "waiting",
       isPolling: false,
@@ -457,6 +456,15 @@
           }
           const result = await response.json();
           this.isPolling = true;
+
+          // === [MỚI] XỬ LÝ CẢNH BÁO THẺ LẠ ===
+          // Nếu nhận được action_type là 'alert', hiện thông báo lỗi và không làm gì tiếp
+          if (result && result.action_type === 'alert') {
+              this.displayMessage(result.message, "error", 5000); // Hiện màu đỏ trong 5s
+              return; 
+          }
+          // ====================================
+
           if (result && result.card_id) {
             this.stopPolling();
             this.checkoutData = result;
@@ -490,7 +498,8 @@
         } catch (error) {
           console.error("Lỗi Polling:", error);
           this.isPolling = false;
-          this.displayMessage("Lỗi kết nối khi lắng nghe cổng!", "error", 2000);
+          // Tạm tắt thông báo lỗi kết nối liên tục để tránh rối mắt
+          // this.displayMessage("Lỗi kết nối khi lắng nghe cổng!", "error", 2000);
           this.stopPolling();
           setTimeout(() => this.startPolling(), 5000);
         }
