@@ -46,75 +46,112 @@ def get_db_connection():
     return conn
 
 # --- HÀM CHỤP ẢNH ĐƯỢC CẬP NHẬT ĐỂ DÙNG 2 CAMERA ---
+# def capture_snapshot(card_id, event_type):
+#     """
+#     Kết nối đến RTSP, chụp một khung hình và lưu lại.
+#     Trả về tên file nếu thành công, hoặc tên file placeholder nếu thất bại.
+#     """
+#     placeholder_filename = "placeholder.jpg" # Tên file dự phòng
+    
+#     # === THAY ĐỔI: Chọn đúng URL camera ===
+#     if event_type == 'in':
+#         rtsp_url = RTSP_URL_IN
+#         print(f"Chụp ảnh VÀO từ: {rtsp_url}")
+#     elif event_type == 'out':
+#         rtsp_url = RTSP_URL_OUT
+#         print(f"Chụp ảnh RA từ: {rtsp_url}")
+#     else:
+#         rtsp_url = RTSP_URL_IN # Mặc định
+#     # ======================================
+    
+#     cap = None
+#     try:
+#         # 1. Kết nối đến camera
+#         cap = cv2.VideoCapture(rtsp_url)
+        
+#         # Thử đọc 5 khung hình đầu để xóa bộ đệm (buffer)
+#         for _ in range(5):
+#             cap.read()
+            
+#         ret, frame = cap.read() # Đọc khung hình chính
+        
+#         if not ret or frame is None:
+#             print(f"Lỗi: Không thể đọc frame từ camera RTSP: {rtsp_url}")
+#             raise Exception("Không thể đọc frame")
+
+#         # 2. Tạo tên file và đường dẫn
+#         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+#         filename = f"{card_id}_{timestamp}_{event_type}.jpg"
+#         destination_path = os.path.join(SNAPSHOT_DIR, filename)
+
+#         # 3. Lưu ảnh
+#         cv2.imwrite(destination_path, frame)
+#         print(f"Đã lưu ảnh chụp: {filename}")
+#         return filename
+
+#     except Exception as e:
+#         print(f"Lỗi khi chụp ảnh từ {rtsp_url}: {e}. Sử dụng ảnh placeholder.")
+#         # Nếu có lỗi, copy ảnh placeholder
+#         placeholder_path_src = os.path.join(BASE_DIR, 'static', placeholder_filename)
+#         if not os.path.exists(placeholder_path_src):
+#             try:
+#                 # Tạo placeholder nếu chưa có
+#                 img = cv2.vconcat([cv2.vconcat([cv2.Mat(100, 300, cv2.CV_8UC3, (128, 128, 128))])])
+#                 cv2.putText(img, 'CAMERA OFFLINE', (50, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+#                 cv2.imwrite(placeholder_path_src, img)
+#             except: pass # Bỏ qua nếu không tạo được
+        
+#         # Copy file placeholder đến đúng vị trí
+#         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+#         filename = f"{card_id}_{timestamp}_{event_type}_offline.jpg"
+#         destination_path = os.path.join(SNAPSHOT_DIR, filename)
+#         try:
+#             shutil.copy(placeholder_path_src, destination_path)
+#         except:
+#              return placeholder_filename # Trả về placeholder gốc
+#         return filename # Trả về file placeholder đã copy
+
+#     finally:
+#         # 4. Luôn giải phóng camera
+#         if cap:
+#             cap.release()
+
 def capture_snapshot(card_id, event_type):
     """
-    Kết nối đến RTSP, chụp một khung hình và lưu lại.
-    Trả về tên file nếu thành công, hoặc tên file placeholder nếu thất bại.
+    PHIÊN BẢN TEST PHẦN CỨNG:
+    Hàm này bỏ qua việc kết nối Camera RTSP để tránh bị Lag/Timeout.
+    Nó sẽ copy ảnh placeholder.jpg có sẵn thành ảnh chụp mới.
     """
-    placeholder_filename = "placeholder.jpg" # Tên file dự phòng
+    print(f"--- [TEST MODE] Bỏ qua Camera, tạo ảnh giả lập cho thẻ {card_id} ---")
     
-    # === THAY ĐỔI: Chọn đúng URL camera ===
-    if event_type == 'in':
-        rtsp_url = RTSP_URL_IN
-        print(f"Chụp ảnh VÀO từ: {rtsp_url}")
-    elif event_type == 'out':
-        rtsp_url = RTSP_URL_OUT
-        print(f"Chụp ảnh RA từ: {rtsp_url}")
-    else:
-        rtsp_url = RTSP_URL_IN # Mặc định
-    # ======================================
+    placeholder_filename = "placeholder.jpg"
     
-    cap = None
+    # Tạo tên file mới dựa trên thời gian
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"{card_id}_{timestamp}_{event_type}_offline.jpg"
+    
+    # Đường dẫn nguồn (ảnh mẫu) và đích (ảnh lưu)
+    placeholder_path_src = os.path.join(BASE_DIR, 'static', placeholder_filename)
+    destination_path = os.path.join(SNAPSHOT_DIR, filename)
+    
     try:
-        # 1. Kết nối đến camera
-        cap = cv2.VideoCapture(rtsp_url)
-        
-        # Thử đọc 5 khung hình đầu để xóa bộ đệm (buffer)
-        for _ in range(5):
-            cap.read()
-            
-        ret, frame = cap.read() # Đọc khung hình chính
-        
-        if not ret or frame is None:
-            print(f"Lỗi: Không thể đọc frame từ camera RTSP: {rtsp_url}")
-            raise Exception("Không thể đọc frame")
-
-        # 2. Tạo tên file và đường dẫn
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"{card_id}_{timestamp}_{event_type}.jpg"
-        destination_path = os.path.join(SNAPSHOT_DIR, filename)
-
-        # 3. Lưu ảnh
-        cv2.imwrite(destination_path, frame)
-        print(f"Đã lưu ảnh chụp: {filename}")
-        return filename
-
-    except Exception as e:
-        print(f"Lỗi khi chụp ảnh từ {rtsp_url}: {e}. Sử dụng ảnh placeholder.")
-        # Nếu có lỗi, copy ảnh placeholder
-        placeholder_path_src = os.path.join(BASE_DIR, 'static', placeholder_filename)
+        # Kiểm tra nếu chưa có ảnh mẫu thì tạo ra một cái (phòng hờ)
         if not os.path.exists(placeholder_path_src):
             try:
-                # Tạo placeholder nếu chưa có
-                img = cv2.vconcat([cv2.vconcat([cv2.Mat(100, 300, cv2.CV_8UC3, (128, 128, 128))])])
-                cv2.putText(img, 'CAMERA OFFLINE', (50, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                # Tạo ảnh màu xám đơn giản bằng OpenCV
+                img = cv2.Mat(100, 300, cv2.CV_8UC3, (128, 128, 128))
+                cv2.putText(img, 'NO CAMERA', (50, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
                 cv2.imwrite(placeholder_path_src, img)
-            except: pass # Bỏ qua nếu không tạo được
+            except: 
+                pass # Bỏ qua nếu không cài opencv hoặc lỗi tạo ảnh
+            
+        # Copy ảnh mẫu sang thư mục snapshots
+        shutil.copy(placeholder_path_src, destination_path)
+        return filename
         
-        # Copy file placeholder đến đúng vị trí
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"{card_id}_{timestamp}_{event_type}_offline.jpg"
-        destination_path = os.path.join(SNAPSHOT_DIR, filename)
-        try:
-            shutil.copy(placeholder_path_src, destination_path)
-        except:
-             return placeholder_filename # Trả về placeholder gốc
-        return filename # Trả về file placeholder đã copy
-
-    finally:
-        # 4. Luôn giải phóng camera
-        if cap:
-            cap.release()
+    except Exception as e:
+        print(f"Lỗi khi tạo ảnh giả lập: {e}")
+        return placeholder_filename # Trả về ảnh gốc nếu lỗi
 
 # --- Decorators để bảo vệ Route ---
 def login_required(f):
