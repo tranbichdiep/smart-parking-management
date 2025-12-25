@@ -14,7 +14,7 @@
 #include <ArduinoJson.h>
 
 // ================== CẤU HÌNH CẦN THAY ĐỔI ==================
-const char* WIFI_SSID = "nosiaht";    // <-- THAY TÊN WIFI
+const char* WIFI_SSID = "nosiaht_esp";    // <-- THAY TÊN WIFI
 const char* WIFI_PASS = "88888888"; // <-- THAY PASS WIFI
 const char* SERVER_IP = "192.168.0.101"; // <-- THAY IP SERVER
 const int SERVER_PORT = 5000;
@@ -107,6 +107,7 @@ void loop() {
     // Kiểm tra xem cảm biến đã thoáng chưa (HIGH)
     if (digitalRead(SENSOR_PIN) == HIGH) {
       Serial.println("👋 Xe đã đi qua hoàn toàn. Đóng cổng!");
+      delay(1000);
       myServo.write(0); // Đóng ngay lập tức
       gatePhase = 0;    // Reset về trạng thái đóng
     }
