@@ -66,6 +66,8 @@
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên chủ thẻ</th>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Biển số xe</th>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loại vé</th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày đăng ký</th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày hết hạn</th>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hành động</th>
         </tr>
@@ -84,20 +86,123 @@
               <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Vé Vãng lai</span>
             {% endif %}
           </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {{ card.created_at|vn_dt if card.created_at else 'N/A' }}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {% if card.expiry_date %}
+              {{ card.expiry_date|vn_dt }}
+            {% else %}
+              <span class="text-gray-400">Chưa thiết lập</span>
+            {% endif %}
+          </td>
           <td class="px-6 py-4 whitespace-nowrap">
-            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">{{ card.status }}</span>
+            {% if card.display_status == 'expired' %}
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">expired</span>
+            {% else %}
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">{{ card.display_status }}</span>
+            {% endif %}
           </td>
           <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-            <a href="{{ url_for('delete_card', card_id=card.card_id) }}" class="text-red-600 hover:text-red-900" onclick="return confirm('Bạn có chắc chắn muốn xóa thẻ này không?');">Xóa</a>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                class="text-indigo-600 hover:text-indigo-900 font-semibold"
+                onclick="openEditModal(this)"
+                data-card-id="{{ card.card_id }}"
+                data-holder-name="{{ card.holder_name or '' }}"
+                data-license-plate="{{ card.license_plate or '' }}"
+                data-ticket-type="{{ card.ticket_type }}"
+                data-created-at="{{ card.created_at or '' }}"
+                data-expiry-date="{{ card.expiry_date or '' }}"
+              >
+                Sửa
+              </button>
+              <a href="{{ url_for('delete_card', card_id=card.card_id) }}" class="text-red-600 hover:text-red-900" onclick="return confirm('Bạn có chắc chắn muốn xóa thẻ này không?');">Xóa</a>
+            </div>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">Chưa có thẻ nào trong hệ thống.</td>
+          <td colspan="8" class="px-6 py-12 text-center text-sm text-gray-500">Chưa có thẻ nào trong hệ thống.</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<!-- Modal chỉnh sửa thẻ -->
+<div id="edit-card-modal" class="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+  <div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl">
+    <div class="flex items-center justify-between px-6 py-4 border-b">
+      <h3 class="text-xl font-semibold text-gray-800">Chỉnh sửa thông tin thẻ</h3>
+      <button type="button" class="text-gray-500 hover:text-gray-700" onclick="closeEditModal()">✕</button>
+    </div>
+    <form id="edit-card-form" action="{{ url_for('edit_card') }}" method="POST" class="px-6 py-4 space-y-4" onsubmit="return confirm('Bạn chắc chắn cập nhật thẻ này?');">
+      <input type="hidden" name="original_card_id" id="original_card_id">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="edit_card_id" class="block text-sm font-medium text-gray-700">ID Thẻ</label>
+          <input id="edit_card_id" name="card_id" type="text" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Loại vé</label>
+          <input id="edit_ticket_type" type="text" class="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-100 text-gray-600" readonly>
+        </div>
+        <div>
+          <label for="edit_holder_name" class="block text-sm font-medium text-gray-700">Tên chủ thẻ</label>
+          <input id="edit_holder_name" name="holder_name" type="text" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+          <label for="edit_license_plate" class="block text-sm font-medium text-gray-700">Biển số xe</label>
+          <input id="edit_license_plate" name="license_plate" type="text" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+          <p class="text-sm font-medium text-gray-700">Ngày đăng ký</p>
+          <p id="edit_created_at" class="mt-1 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-3 py-2"></p>
+        </div>
+        <div>
+          <p class="text-sm font-medium text-gray-700">Hạn hiện tại</p>
+          <p id="edit_expiry_date" class="mt-1 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-3 py-2"></p>
+        </div>
+        <div class="md:col-span-2">
+          <label for="extend_months" class="block text-sm font-medium text-gray-700">Gia hạn thêm</label>
+          <select id="extend_months" name="extend_months" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <option value="0">Không gia hạn</option>
+            <option value="1">+1 tháng</option>
+            <option value="2">+2 tháng</option>
+            <option value="3">+3 tháng</option>
+          </select>
+          <p class="mt-1 text-xs text-gray-500">Hạn sử dụng mới sẽ tính từ ngày hết hạn gần nhất của thẻ.</p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 pt-2 border-t">
+        <button type="button" class="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50" onclick="closeEditModal()">Hủy</button>
+        <button type="submit" class="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700">Lưu thay đổi</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const editCardModal = document.getElementById('edit-card-modal');
+
+  function openEditModal(button) {
+    const data = button.dataset;
+    document.getElementById('original_card_id').value = data.cardId || '';
+    document.getElementById('edit_card_id').value = data.cardId || '';
+    document.getElementById('edit_holder_name').value = data.holderName || '';
+    document.getElementById('edit_license_plate').value = data.licensePlate || '';
+    document.getElementById('edit_ticket_type').value = data.ticketType || 'daily';
+    document.getElementById('edit_created_at').innerText = data.createdAt || 'N/A';
+    document.getElementById('edit_expiry_date').innerText = data.expiryDate ? data.expiryDate : 'Chưa thiết lập';
+    document.getElementById('extend_months').value = '0';
+    editCardModal.classList.remove('hidden');
+  }
+
+  function closeEditModal() {
+    editCardModal.classList.add('hidden');
+  }
+</script>
 {% endblock %}

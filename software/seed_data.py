@@ -1,11 +1,20 @@
 import sqlite3
 import os
 import random
+import calendar
 from datetime import datetime, timedelta
 
 # --- CẤU HÌNH ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(BASE_DIR, '..', 'database', 'parking.db')
+
+def add_months(base_date, months):
+    """Cộng thêm số tháng, giữ nguyên ngày nếu có thể."""
+    month = base_date.month - 1 + months
+    year = base_date.year + month // 12
+    month = month % 12 + 1
+    day = min(base_date.day, calendar.monthrange(year, month)[1])
+    return base_date.replace(year=year, month=month, day=day)
 
 def get_current_fee(cursor):
     """Hàm lấy giá vé hiện tại từ cấu hình Database"""
@@ -32,19 +41,38 @@ def get_monthly_fee(cursor):
 def seed_monthly_payments(cursor, monthly_fee, month_count=8):
     """Sinh dữ liệu giả lập đóng tiền vé tháng cho nhiều tháng gần đây."""
     print(f"Đang sinh dữ liệu đóng tiền vé tháng {month_count} tháng gần nhất...")
+    now = datetime.now()
     monthly_cards = [
-        ("MONTH_1001", "Nguyễn Văn A", "30A-555.88"),
-        ("MONTH_1002", "Trần Thị B", "29B-111.22"),
-        ("MONTH_1003", "Phạm Văn C", "90F-333.44"),
+        {
+            "card_id": "MONTH_1001",
+            "holder": "Nguyễn Văn A",
+            "plate": "30A-555.88",
+            "created_at": now - timedelta(days=25),  # Còn hạn ít ngày
+        },
+        {
+            "card_id": "MONTH_1002",
+            "holder": "Trần Thị B",
+            "plate": "29B-111.22",
+            "created_at": now - timedelta(days=35),  # Hết hạn 5 ngày
+        },
+        {
+            "card_id": "MONTH_1003",
+            "holder": "Phạm Văn C",
+            "plate": "90F-333.44",
+            "created_at": now - timedelta(days=10),  # Tùy chọn: còn hạn dài
+        },
     ]
 
-    for card_id, holder, plate in monthly_cards:
+    for card in monthly_cards:
+        created_at_dt = card["created_at"]
+        created_at = created_at_dt.strftime("%Y-%m-%d %H:%M:%S")
+        expiry_date = add_months(created_at_dt, 1).strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute(
             """
-            INSERT OR IGNORE INTO cards (card_id, holder_name, license_plate, ticket_type, expiry_date, status)
-            VALUES (?, ?, ?, 'monthly', NULL, 'active')
+            INSERT OR IGNORE INTO cards (card_id, holder_name, license_plate, ticket_type, expiry_date, created_at, status)
+            VALUES (?, ?, ?, 'monthly', ?, ?, 'active')
             """,
-            (card_id, holder, plate),
+            (card["card_id"], card["holder"], card["plate"], expiry_date, created_at),
         )
 
     start_month = datetime.now().replace(day=1)
@@ -60,7 +88,8 @@ def seed_monthly_payments(cursor, monthly_fee, month_count=8):
         paid_day = min(28, random.randint(1, 10))
         paid_at = datetime(year, month, paid_day, 9, 0, 0).strftime("%Y-%m-%d %H:%M:%S")
 
-        for card_id, _, _ in monthly_cards:
+        for card in monthly_cards:
+            card_id = card["card_id"]
             cursor.execute(
                 """
                 INSERT INTO monthly_payments (card_id, month, amount, paid_at)

@@ -331,6 +331,9 @@
               ><span class="text-2xl font-semibold">VNĐ</span>
             </p>
           </div>
+          <div x-show="checkoutData.ticket_type === 'monthly' && checkoutData.fee > 0" class="text-red-600 font-bold text-center mt-2 animate-pulse">
+            ⚠️ THẺ ĐÃ HẾT HẠN - TÍNH PHÍ NHƯ VÃNG LAI
+          </div>
           <div
             x-show="checkoutData.fee === 0"
             class="mt-3 p-4 text-center bg-blue-50 rounded-lg border border-blue-200"
@@ -468,6 +471,7 @@
           if (result && result.card_id) {
             this.stopPolling();
             this.checkoutData = result;
+            this.checkoutData.ticket_type = result.ticket_type || "daily";
             if (result.action_type === "entry") {
               this.licensePlate = result.license_plate || "";
               this.checkoutData.holder_name =

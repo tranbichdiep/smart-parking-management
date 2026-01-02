@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, j
 import sqlite3
 import os
 import json
+import calendar
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
 from datetime import datetime, timedelta
@@ -44,6 +45,14 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE, timeout=20.0)
     conn.row_factory = sqlite3.Row
     return conn
+
+def add_months(base_date, months):
+    """Cộng thêm số tháng, giữ nguyên ngày trong tháng nếu có thể."""
+    month = base_date.month - 1 + months
+    year = base_date.year + month // 12
+    month = month % 12 + 1
+    day = min(base_date.day, calendar.monthrange(year, month)[1])
+    return base_date.replace(year=year, month=month, day=day)
 
 # --- HÀM CHỤP ẢNH ĐƯỢC CẬP NHẬT ĐỂ DÙNG 2 CAMERA ---
 # def capture_snapshot(card_id, event_type):
@@ -214,8 +223,20 @@ def index():
 @role_required('admin')
 def admin_dashboard():
     conn = get_db_connection()
-    cards = conn.execute('SELECT card_id, holder_name, license_plate, ticket_type, status FROM cards ORDER BY card_id').fetchall()
+    rows = conn.execute('SELECT card_id, holder_name, license_plate, ticket_type, status, created_at, expiry_date FROM cards ORDER BY card_id').fetchall()
     conn.close()
+    cards = []
+    now_dt = datetime.now()
+    for row in rows:
+        card = dict(row)
+        is_expired = False
+        if card.get('expiry_date'):
+            try:
+                is_expired = datetime.strptime(card['expiry_date'], "%Y-%m-%d %H:%M:%S") < now_dt
+            except ValueError:
+                is_expired = False
+        card['display_status'] = 'expired' if card.get('ticket_type') == 'monthly' and is_expired else card.get('status', 'unknown')
+        cards.append(card)
     return render_template('admin_dashboard.html', cards=cards)
 
 # ======================================================
@@ -328,17 +349,85 @@ def add_card():
     holder_name = request.form.get('holder_name', '') 
     license_plate = request.form.get('license_plate', '') 
     ticket_type = request.form.get('ticket_type', 'monthly') 
+    created_at_dt = datetime.now()
+    created_at = created_at_dt.strftime("%Y-%m-%d %H:%M:%S")
+    expiry_date = None
+    if ticket_type == 'monthly':
+        expiry_date = add_months(created_at_dt, 1).strftime("%Y-%m-%d %H:%M:%S")
 
     conn = get_db_connection()
     try:
         conn.execute(
-            'INSERT INTO cards (card_id, holder_name, license_plate, ticket_type, status) VALUES (?, ?, ?, ?, ?)',
-            (card_id, holder_name, license_plate if ticket_type == 'monthly' else None, ticket_type, 'active')
+            'INSERT INTO cards (card_id, holder_name, license_plate, ticket_type, expiry_date, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (card_id, holder_name, license_plate if ticket_type == 'monthly' else None, ticket_type, expiry_date, created_at, 'active')
         )
         conn.commit()
         flash(f'Đã thêm thẻ {card_id} thành công!', 'success')
     except sqlite3.IntegrityError:
         flash(f'Lỗi: Thẻ {card_id} đã tồn tại!', 'danger')
+    finally:
+        conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/edit_card', methods=['POST'])
+@login_required
+@role_required('admin')
+def edit_card():
+    original_card_id = request.form['original_card_id']
+    new_card_id = request.form['card_id'].strip()
+    holder_name = request.form.get('holder_name', '').strip()
+    license_plate = (request.form.get('license_plate', '') or '').strip() or None
+    extend_months = int(request.form.get('extend_months', 0) or 0)
+
+    if not new_card_id:
+        flash('ID thẻ không được để trống!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    conn = get_db_connection()
+    try:
+        card = conn.execute('SELECT * FROM cards WHERE card_id = ?', (original_card_id,)).fetchone()
+        if not card:
+            flash('Không tìm thấy thẻ cần chỉnh sửa.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+        ticket_type = card['ticket_type']
+        base_date_str = card['expiry_date'] or card['created_at']
+        new_expiry_date = card['expiry_date']
+
+        if ticket_type == 'monthly' and extend_months > 0:
+            try:
+                base_date = datetime.strptime(base_date_str, "%Y-%m-%d %H:%M:%S") if base_date_str else datetime.now()
+            except ValueError:
+                base_date = datetime.now()
+
+            new_expiry_dt = add_months(base_date, extend_months)
+            new_expiry_date = new_expiry_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+            settings_data = conn.execute('SELECT * FROM settings').fetchall()
+            settings = {row['key']: row['value'] for row in settings_data}
+            monthly_fee = int(settings.get('monthly_fee', 0))
+            total_amount = monthly_fee * extend_months
+            paid_at = datetime.now()
+            month_label = paid_at.strftime("%Y-%m")
+            conn.execute(
+                "INSERT INTO monthly_payments (card_id, month, amount, paid_at) VALUES (?, ?, ?, ?)",
+                (new_card_id, month_label, total_amount, paid_at.strftime("%Y-%m-%d %H:%M:%S"))
+            )
+
+        conn.execute(
+            """UPDATE cards 
+               SET card_id = ?, holder_name = ?, license_plate = ?, expiry_date = ?
+               WHERE card_id = ?""",
+            (new_card_id, holder_name, license_plate if ticket_type == 'monthly' else None, new_expiry_date, original_card_id)
+        )
+        conn.commit()
+        flash(f'Đã cập nhật thẻ {new_card_id} thành công!', 'success')
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        flash('ID thẻ mới đã tồn tại, vui lòng chọn ID khác.', 'danger')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Lỗi khi cập nhật thẻ: {e}', 'danger')
     finally:
         conn.close()
     return redirect(url_for('admin_dashboard'))
@@ -631,6 +720,8 @@ def get_pending_scans():
             # Tìm ảnh lúc vào để đối chiếu
             entry_snapshot = conn.execute('SELECT entry_snapshot FROM transactions WHERE id = ?', (pending['transaction_id'],)).fetchone()
             entry_snapshot_url = f"/static/snapshots/{entry_snapshot['entry_snapshot']}" if entry_snapshot and entry_snapshot['entry_snapshot'] else url_for('static', filename='placeholder.jpg')
+            card_info = conn.execute('SELECT ticket_type FROM cards WHERE card_id = ?', (pending['card_id'],)).fetchone()
+            ticket_type = card_info['ticket_type'] if card_info else 'daily'
             
             conn.close()
             return jsonify({
@@ -643,7 +734,8 @@ def get_pending_scans():
                 "exit_time": datetime.strptime(pending['created_at'], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M:%S"),
                 "duration": pending['duration'],
                 "fee": pending['fee'],
-                "entry_snapshot_url": entry_snapshot_url
+                "entry_snapshot_url": entry_snapshot_url,
+                "ticket_type": ticket_type
             })
             
     conn.close()
@@ -667,9 +759,9 @@ def confirm_pending_entry():
         # Tạo thẻ vãng lai nếu chưa có (Với logic mới, đoạn này ít khi chạy nhưng cứ để phòng hờ)
         card_info = conn.execute('SELECT * FROM cards WHERE card_id = ?', (card_id,)).fetchone()
         if not card_info:
-             conn.execute(
-                'INSERT INTO cards (card_id, holder_name, ticket_type, status) VALUES (?, ?, ?, ?)',
-                (card_id, f'Khách vãng lai {license_plate}', 'daily', 'active')
+            conn.execute(
+                'INSERT INTO cards (card_id, holder_name, ticket_type, status, created_at) VALUES (?, ?, ?, ?, ?)',
+                (card_id, f'Khách vãng lai {license_plate}', 'daily', 'active', entry_time)
             )
 
         conn.execute(
@@ -804,9 +896,18 @@ def device_scan():
             entry_time_dt = datetime.strptime(active_transaction['entry_time'], "%Y-%m-%d %H:%M:%S")
             duration = exit_time_dt - entry_time_dt
 
-            # Tính phí (Chỉ tính nếu là vé ngày - daily)
+            # Tính phí (vãng lai hoặc vé tháng đã hết hạn)
             fee = 0
-            if card_type == 'daily':
+            expiry_date_dt = None
+            if card_info['expiry_date']:
+                try:
+                    expiry_date_dt = datetime.strptime(card_info['expiry_date'], "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    expiry_date_dt = None
+
+            should_charge_walkin = card_type == 'daily' or (card_type == 'monthly' and expiry_date_dt and expiry_date_dt < entry_time_dt)
+
+            if should_charge_walkin:
                 settings_data = conn.execute('SELECT * FROM settings').fetchall()
                 settings = {row['key']: row['value'] for row in settings_data}
                 fee_per_hour = int(settings.get('fee_per_hour', 5000))

@@ -38,6 +38,7 @@ def setup_database():
             license_plate TEXT,
             ticket_type TEXT NOT NULL,
             expiry_date TEXT,
+            created_at TEXT,
             status TEXT NOT NULL
         );
         """)
@@ -45,6 +46,10 @@ def setup_database():
 
         try:
             cursor.execute("ALTER TABLE cards ADD COLUMN license_plate TEXT;")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE cards ADD COLUMN created_at TEXT;")
         except sqlite3.OperationalError:
             pass
 
