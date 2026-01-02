@@ -119,11 +119,6 @@
                                    class="text-sm font-medium {{ 'text-green-600 hover:text-green-900' if user.status == 'locked' else 'text-orange-600 hover:text-orange-900' }}">
                                    {{ 'Mở khóa' if user.status == 'locked' else 'Khóa' }}
                                 </a>
-                                
-                                <span class="text-gray-300">|</span>
-                                <a href="{{ url_for('delete_user', username=user.username) }}" 
-                                   class="text-sm font-medium text-red-600 hover:text-red-900"
-                                   onclick="return confirm('Xóa vĩnh viễn tài khoản này?');">Xóa</a>
                             {% endif %}
                         </div>
                     </div>

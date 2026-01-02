@@ -315,15 +315,7 @@ def add_user():
 @login_required
 @role_required('admin')
 def delete_user(username):
-    if username == session['username']:
-        flash('Bạn không thể xóa tài khoản đang đăng nhập!', 'danger')
-        return redirect(url_for('user_management'))
-
-    conn = get_db_connection()
-    conn.execute('DELETE FROM users WHERE username = ?', (username,))
-    conn.commit()
-    conn.close()
-    flash(f'Đã xóa nhân viên "{username}"!', 'success')
+    flash('Hệ thống không hỗ trợ xóa tài khoản nhân viên. Vui lòng khóa thay vì xóa.', 'warning')
     return redirect(url_for('user_management'))
 
 @app.route('/admin/users/toggle_status/<username>')
