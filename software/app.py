@@ -54,6 +54,18 @@ def add_months(base_date, months):
     day = min(base_date.day, calendar.monthrange(year, month)[1])
     return base_date.replace(year=year, month=month, day=day)
 
+
+def generate_next_employee_code(conn):
+    """Sinh mã nhân viên 6 số (001234) dựa trên mã lớn nhất hiện có."""
+    cursor = conn.execute(
+        "SELECT MAX(CAST(employee_code AS INTEGER)) FROM users WHERE employee_code GLOB '[0-9][0-9]*'"
+    )
+    max_code = cursor.fetchone()[0] or 0
+    next_code_val = int(max_code) + 1
+    if next_code_val > 999999:
+        raise ValueError("Đã hết dải mã nhân viên (tối đa 999999).")
+    return f"{next_code_val:06d}"
+
 # --- HÀM CHỤP ẢNH ĐƯỢC CẬP NHẬT ĐỂ DÙNG 2 CAMERA ---
 # def capture_snapshot(card_id, event_type):
 #     """
@@ -251,7 +263,9 @@ def admin_dashboard():
 @role_required('admin')
 def user_management():
     conn = get_db_connection()
-    users = conn.execute('SELECT username, role, status FROM users').fetchall()
+    users = conn.execute(
+        'SELECT username, role, status, employee_code, full_name FROM users ORDER BY employee_code'
+    ).fetchall()
     conn.close()
     return render_template('user_management.html', users=users)
 
@@ -263,23 +277,36 @@ def add_user():
     password = request.form['password']
     role = request.form['role']
     status = request.form.get('status', 'active') 
+    full_name = (request.form.get('full_name', '') or '').strip()
     
-    if not username or not password:
-        flash('Vui lòng nhập đầy đủ thông tin!', 'danger')
+    if not username or not password or not full_name:
+        flash('Vui lòng nhập đầy đủ thông tin (họ tên, tài khoản, mật khẩu)!', 'danger')
         return redirect(url_for('user_management'))
 
     hashed_password = generate_password_hash(password)
     
     conn = get_db_connection()
     try:
+        conn.execute("BEGIN IMMEDIATE;")
+        employee_code = generate_next_employee_code(conn)
         conn.execute(
-            'INSERT INTO users (username, password_hash, role, status) VALUES (?, ?, ?, ?)',
-            (username, hashed_password, role, status)
+            'INSERT INTO users (username, password_hash, role, status, employee_code, full_name) VALUES (?, ?, ?, ?, ?, ?)',
+            (username, hashed_password, role, status, employee_code, full_name)
         )
         conn.commit()
-        flash(f'Đã thêm nhân viên "{username}" thành công!', 'success')
-    except sqlite3.IntegrityError:
-        flash(f'Lỗi: Tên đăng nhập "{username}" đã tồn tại!', 'danger')
+        flash(f'Đã thêm nhân viên "{full_name}" (Mã {employee_code}) thành công!', 'success')
+    except ValueError as exc:
+        conn.rollback()
+        flash(str(exc), 'danger')
+    except sqlite3.IntegrityError as exc:
+        conn.rollback()
+        error_msg = str(exc)
+        if 'users.username' in error_msg:
+            flash(f'Lỗi: Tên đăng nhập "{username}" đã tồn tại!', 'danger')
+        elif 'employee_code' in error_msg:
+            flash('Lỗi: Mã nhân viên bị trùng, vui lòng thử lại.', 'danger')
+        else:
+            flash('Không thể thêm nhân viên, vui lòng thử lại.', 'danger')
     finally:
         conn.close()
     return redirect(url_for('user_management'))
