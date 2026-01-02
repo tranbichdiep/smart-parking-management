@@ -691,10 +691,10 @@ def view_transactions():
         params.append(like_guard)
 
     if date_from:
-        conditions.append("entry_time >= ?")
+        conditions.append("exit_time IS NOT NULL AND exit_time >= ?")
         params.append(f"{date_from} 00:00:00")
     if date_to:
-        conditions.append("entry_time <= ?")
+        conditions.append("exit_time IS NOT NULL AND exit_time <= ?")
         params.append(f"{date_to} 23:59:59")
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
