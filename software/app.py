@@ -235,7 +235,10 @@ def admin_dashboard():
                 is_expired = datetime.strptime(card['expiry_date'], "%Y-%m-%d %H:%M:%S") < now_dt
             except ValueError:
                 is_expired = False
-        card['display_status'] = 'expired' if card.get('ticket_type') == 'monthly' and is_expired else card.get('status', 'unknown')
+        display_status = card.get('status') or 'unknown'
+        if display_status != 'lost' and card.get('ticket_type') == 'monthly' and is_expired:
+            display_status = 'expired'
+        card['display_status'] = display_status
         cards.append(card)
     return render_template('admin_dashboard.html', cards=cards)
 
@@ -345,10 +348,20 @@ def reset_password():
 @login_required
 @role_required('admin')
 def add_card():
-    card_id = request.form['card_id']
-    holder_name = request.form.get('holder_name', '') 
-    license_plate = request.form.get('license_plate', '') 
-    ticket_type = request.form.get('ticket_type', 'monthly') 
+    card_id = request.form['card_id'].strip()
+    holder_name = (request.form.get('holder_name', '') or '').strip()
+    license_plate = (request.form.get('license_plate', '') or '').strip()
+    ticket_type = request.form.get('ticket_type', 'monthly')
+
+    if not card_id:
+        flash('ID thẻ không được để trống!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    if ticket_type == 'monthly':
+        if not holder_name or not license_plate:
+            flash('Vé tháng cần Tên chủ thẻ và Biển số xe.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
     created_at_dt = datetime.now()
     created_at = created_at_dt.strftime("%Y-%m-%d %H:%M:%S")
     expiry_date = None
@@ -359,12 +372,13 @@ def add_card():
     try:
         conn.execute(
             'INSERT INTO cards (card_id, holder_name, license_plate, ticket_type, expiry_date, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (card_id, holder_name, license_plate if ticket_type == 'monthly' else None, ticket_type, expiry_date, created_at, 'active')
+            (card_id, holder_name if ticket_type == 'monthly' else f'Khách vãng lai {card_id}',
+             license_plate if ticket_type == 'monthly' else None, ticket_type, expiry_date, created_at, 'active')
         )
         conn.commit()
         flash(f'Đã thêm thẻ {card_id} thành công!', 'success')
     except sqlite3.IntegrityError:
-        flash(f'Lỗi: Thẻ {card_id} đã tồn tại!', 'danger')
+        flash(f'ID thẻ {card_id} đã tồn tại, vui lòng kiểm tra để xóa ID cũ hoặc dùng ID khác.', 'danger')
     finally:
         conn.close()
     return redirect(url_for('admin_dashboard'))
@@ -430,6 +444,36 @@ def edit_card():
         flash(f'Lỗi khi cập nhật thẻ: {e}', 'danger')
     finally:
         conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/cards/set_status', methods=['POST'])
+@login_required
+@role_required('admin')
+def set_card_status():
+    card_id = (request.form.get('card_id') or '').strip()
+    new_status = request.form.get('status')
+
+    if not card_id or new_status not in ('active', 'lost'):
+        flash('Yêu cầu đổi trạng thái không hợp lệ.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    conn = get_db_connection()
+    try:
+        card = conn.execute('SELECT * FROM cards WHERE card_id = ?', (card_id,)).fetchone()
+        if not card:
+            flash('Không tìm thấy thẻ cần cập nhật trạng thái.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+        conn.execute('UPDATE cards SET status = ? WHERE card_id = ?', (new_status, card_id))
+        conn.commit()
+        msg = 'Đã kích hoạt lại thẻ.' if new_status == 'active' else 'Đã báo mất thẻ, thẻ bị vô hiệu hóa.'
+        flash(msg, 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Lỗi khi cập nhật trạng thái thẻ: {e}', 'danger')
+    finally:
+        conn.close()
+
     return redirect(url_for('admin_dashboard'))
     
 @app.route('/admin/delete_card/<card_id>')
@@ -664,27 +708,28 @@ def get_pending_scans():
     
     # 1. Dọn dẹp các yêu cầu cũ quá 2 phút
     two_min_ago = (datetime.now() - timedelta(minutes=2)).strftime("%Y-%m-%d %H:%M:%S")
-    conn.execute("DELETE FROM pending_actions WHERE status IN ('pending', 'alert_unregistered') AND created_at < ?", (two_min_ago,))
+    conn.execute("DELETE FROM pending_actions WHERE status IN ('pending', 'alert_unregistered', 'alert_lost') AND created_at < ?", (two_min_ago,))
     conn.commit()
 
     # 2. Lấy yêu cầu mới nhất (bao gồm cả 'pending' VÀ 'alert_unregistered')
     pending = conn.execute(
-        "SELECT * FROM pending_actions WHERE status IN ('pending', 'alert_unregistered') ORDER BY created_at ASC LIMIT 1"
+        "SELECT * FROM pending_actions WHERE status IN ('pending', 'alert_unregistered', 'alert_lost') ORDER BY created_at ASC LIMIT 1"
     ).fetchone()
     
     if pending:
         # === TRƯỜNG HỢP 1: CẢNH BÁO THẺ LẠ ===
-        if pending['status'] == 'alert_unregistered':
+        if pending['status'] in ('alert_unregistered', 'alert_lost'):
             # Xóa ngay bản ghi này để không báo lại liên tục
             conn.execute("DELETE FROM pending_actions WHERE id = ?", (pending['id'],))
             conn.commit()
             conn.close()
             
             # Trả về JSON đặc biệt loại 'alert'
+            alert_message = f"CẢNH BÁO: Thẻ lạ {pending['card_id']}!" if pending['status'] == 'alert_unregistered' else f"THẺ BÁO MẤT: {pending['card_id']} đã bị vô hiệu hóa!"
             return jsonify({
                 "action_type": "alert",
                 "card_id": pending['card_id'],
-                "message": f"CẢNH BÁO: Phát hiện thẻ lạ {pending['card_id']}!"
+                "message": alert_message
             })
 
         # === TRƯỜNG HỢP 2: XE CHỜ DUYỆT (Bình thường) ===
@@ -879,6 +924,27 @@ def device_scan():
             return jsonify({
                 "action": "wait", 
                 "message": "Thẻ không thuộc bãi xe"
+            })
+        # ==================================================================
+
+        # ==================================================================
+        # CHẶN THẺ BÁO MẤT
+        # ==================================================================
+        if card_info['status'] == 'lost':
+            try:
+                conn.execute(
+                    "INSERT INTO pending_actions (card_id, status, action_type, created_at) VALUES (?, ?, ?, ?)",
+                    (card_id, 'alert_lost', 'alert', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Lỗi ghi alert lost-card: {e}")
+
+            conn.close()
+            print(f"🚫 Thẻ {card_id} đang ở trạng thái MẤT THẺ. Đã báo lên Web.")
+            return jsonify({
+                "action": "wait",
+                "message": "Thẻ này đã bị báo mất. Vui lòng liên hệ quản lý."
             })
         # ==================================================================
 
