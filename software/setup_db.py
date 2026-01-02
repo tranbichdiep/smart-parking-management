@@ -78,6 +78,18 @@ def setup_database():
         except sqlite3.OperationalError:
             pass
 
+        # --- Bảng đóng tiền vé tháng ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS monthly_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            card_id TEXT NOT NULL,
+            month TEXT NOT NULL,          -- Định dạng YYYY-MM
+            amount INTEGER NOT NULL,
+            paid_at TEXT NOT NULL         -- Thời điểm thanh toán
+        );
+        """)
+        print("Đã tạo/cập nhật bảng 'monthly_payments'.")
+
         # --- MỚI: Bảng chờ duyệt (pending_actions) ---
         # Đã cập nhật để xử lý cả VÀO và RA
         cursor.execute("DROP TABLE IF EXISTS pending_actions;") # Xóa bảng cũ nếu có
@@ -122,4 +134,3 @@ def setup_database():
 
 if __name__ == '__main__':
     setup_database()
-

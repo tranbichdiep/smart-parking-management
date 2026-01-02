@@ -1,190 +1,177 @@
-{% extends "layout.html" %} {% block title %}Thống kê Doanh thu{% endblock %} {%
-block extra_head %}
+{% extends "layout.html" %}
+{% block title %}Thống kê Doanh thu{% endblock %}
+{% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-{% endblock %} {% block content %}
+{% endblock %}
+{% block content %}
 <div class="space-y-6">
-  <div
-    class="flex flex-col md:flex-row justify-between items-center border-b pb-4 gap-4"
-  >
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-4 gap-4">
     <div>
       <h1 class="text-3xl font-bold text-slate-800">Báo cáo Thống kê</h1>
-      <span class="text-sm text-slate-500 italic"
-        >Dữ liệu cập nhật theo thời gian thực</span
-      >
+      <span class="text-sm text-slate-500 italic">Dữ liệu cập nhật theo thời gian thực</span>
     </div>
-
-    <form
-      action="{{ url_for('statistics') }}"
-      method="GET"
-      class="flex flex-wrap items-center gap-2 bg-slate-100 p-2 rounded-lg"
-    >
-      <button
-        type="submit"
-        name="filter"
-        value="7days"
-        class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors 
-                {{ 'bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200' if current_filter == '7days' else 'text-slate-600 hover:bg-slate-200' }}"
-      >
-        7 Ngày qua
-      </button>
-
-      <button
-        type="submit"
-        name="filter"
-        value="6months"
-        class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors 
-                {{ 'bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200' if current_filter == '6months' else 'text-slate-600 hover:bg-slate-200' }}"
-      >
-        6 Tháng
-      </button>
-
-      <div class="h-6 w-px bg-slate-300 mx-1"></div>
-
-      <div class="flex items-center gap-2">
-        <input
-          type="date"
-          name="start"
-          value="{{ current_start }}"
-          class="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-2 py-1"
-        />
-        <span class="text-slate-400">-</span>
-        <input
-          type="date"
-          name="end"
-          value="{{ current_end }}"
-          class="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-2 py-1"
-        />
-
-        <button
-          type="submit"
-          name="filter"
-          value="custom"
-          class="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-indigo-700 shadow-sm"
-        >
-          Lọc
-        </button>
-      </div>
-    </form>
   </div>
 
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <div
-      class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4"
-    >
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4">
       <div class="p-3 bg-green-100 text-green-600 rounded-full">
-        <svg
-          class="w-8 h-8"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          ></path>
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
       </div>
       <div>
         <p class="text-sm font-medium text-slate-500">Doanh thu Hôm nay</p>
-        <p class="text-2xl font-bold text-slate-800">
-          {{ "{:,.0f}".format(revenue_today) }} VNĐ
-        </p>
+        <p class="text-2xl font-bold text-slate-800">{{ "{:,.0f}".format(revenue_today) }} VNĐ</p>
       </div>
     </div>
 
-    <div
-      class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4"
-    >
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4">
       <div class="p-3 bg-blue-100 text-blue-600 rounded-full">
-        <svg
-          class="w-8 h-8"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M13 10V3L4 14h7v7l9-11h-7z"
-          ></path>
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
         </svg>
       </div>
       <div>
         <p class="text-sm font-medium text-slate-500">Lượt xe vào hôm nay</p>
-        <p class="text-2xl font-bold text-slate-800">
-          {{ traffic_today }} lượt
-        </p>
+        <p class="text-2xl font-bold text-slate-800">{{ traffic_today }} lượt</p>
       </div>
     </div>
 
-    <div
-      class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4"
-    >
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center space-x-4">
       <div class="p-3 bg-orange-100 text-orange-600 rounded-full">
-        <svg
-          class="w-8 h-8"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-          ></path>
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
         </svg>
       </div>
       <div>
         <p class="text-sm font-medium text-slate-500">Xe đang gửi</p>
-        <p class="text-2xl font-bold text-slate-800">
-          {{ cars_in_parking }} xe
-        </p>
+        <p class="text-2xl font-bold text-slate-800">{{ cars_in_parking }} xe</p>
       </div>
     </div>
   </div>
 
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-      <h3 class="text-lg font-semibold text-slate-700 mb-4">
-        Biểu đồ Doanh thu
-        <span class="text-sm font-normal text-slate-500">
-          ({{ '6 Tháng' if current_filter == '6months' else ('Từ ' ~
-          current_start|replace('-', '/') ~ ' đến ' ~ current_end|replace('-',
-          '/') if current_filter == 'custom' else '7 ngày qua') }})
-        </span>
-      </h3>
-      <canvas id="revenueChart"></canvas>
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="flex flex-wrap items-center justify-between px-6 pt-6 pb-4 border-b">
+      <div class="flex gap-2">
+        <button type="button" data-tab-target="walkin" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold border transition-colors">Khách Vãng Lai</button>
+        <button type="button" data-tab-target="monthly" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold border transition-colors">Khách Vé Tháng</button>
+      </div>
+      <p class="text-sm text-slate-500">Mỗi tab có bộ lọc riêng (vãng lai theo ngày, vé tháng theo tháng)</p>
     </div>
 
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-      <h3 class="text-lg font-semibold text-slate-700 mb-4">
-        Lưu lượng xe vào (7 ngày qua)
-      </h3>
-      <canvas id="trafficChart"></canvas>
+    <div class="p-6">
+      <!-- Tab Vãng lai -->
+      <div data-tab-panel="walkin" class="tab-panel space-y-5">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-800">Khách Vãng Lai</h3>
+            <p class="text-sm text-slate-500">Lọc theo ngày, dùng riêng cho giao dịch vãng lai.</p>
+          </div>
+          <form action="{{ url_for('statistics') }}" method="GET" class="flex flex-wrap items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg">
+            <input type="hidden" name="active_tab" value="walkin" />
+            <button type="submit" name="filter_daily" value="7days" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors {{ 'bg-indigo-600 text-white shadow-sm' if current_filter == '7days' else 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100' }}">7 Ngày qua</button>
+            <button type="submit" name="filter_daily" value="6months" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors {{ 'bg-indigo-600 text-white shadow-sm' if current_filter == '6months' else 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100' }}">6 Tháng</button>
+            <div class="h-6 w-px bg-slate-300 mx-1"></div>
+            <div class="flex items-center gap-2">
+              <input type="date" name="start_daily" value="{{ current_start }}" class="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-2 py-1" />
+              <span class="text-slate-400">-</span>
+              <input type="date" name="end_daily" value="{{ current_end }}" class="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-2 py-1" />
+              <button type="submit" name="filter_daily" value="custom" class="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-indigo-700 shadow-sm">Lọc</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h4 class="text-lg font-semibold text-slate-700 mb-4">Doanh thu vãng lai</h4>
+            <canvas id="walkinRevenueChart"></canvas>
+          </div>
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h4 class="text-lg font-semibold text-slate-700 mb-4">Lưu lượng xe vào</h4>
+            <canvas id="walkinTrafficChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Vé tháng -->
+      <div data-tab-panel="monthly" class="tab-panel space-y-5 hidden">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-800">Khách Vé Tháng</h3>
+            <p class="text-sm text-slate-500">Lọc theo tháng để xem lịch sử đóng tiền.</p>
+          </div>
+          <form action="{{ url_for('statistics') }}" method="GET" class="flex flex-wrap items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg">
+            <input type="hidden" name="active_tab" value="monthly" />
+            <button type="submit" name="filter_monthly" value="6months" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors {{ 'bg-indigo-600 text-white shadow-sm' if monthly_filter == '6months' else 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100' }}">6 Tháng</button>
+            <button type="submit" name="filter_monthly" value="12months" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors {{ 'bg-indigo-600 text-white shadow-sm' if monthly_filter == '12months' else 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100' }}">12 Tháng</button>
+            <div class="h-6 w-px bg-slate-300 mx-1"></div>
+            <div class="flex items-center gap-2">
+              <input type="month" name="start_month" value="{{ monthly_start }}" class="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-2 py-1" />
+              <span class="text-slate-400">-</span>
+              <input type="month" name="end_month" value="{{ monthly_end }}" class="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-2 py-1" />
+              <button type="submit" name="filter_monthly" value="custom" class="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-indigo-700 shadow-sm">Lọc</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500">Tổng thu vé tháng (khoảng lọc)</p>
+              <p class="text-2xl font-bold text-slate-800">{{ "{:,.0f}".format(monthly_total) }} VNĐ</p>
+            </div>
+            <span class="px-3 py-1 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded-full">Monthly</span>
+          </div>
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500">Số lượt đóng tiền</p>
+              <p class="text-2xl font-bold text-slate-800">{{ monthly_payment_count }} lượt</p>
+            </div>
+            <span class="px-3 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-full">Payments</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h4 class="text-lg font-semibold text-slate-700 mb-4">Doanh thu vé tháng</h4>
+            <canvas id="monthlyRevenueChart"></canvas>
+          </div>
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h4 class="text-lg font-semibold text-slate-700 mb-4">Số lượt đóng theo tháng</h4>
+            <canvas id="monthlyCountChart"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-  // Lấy dữ liệu từ Flask truyền sang
-  const dates = {{ dates | safe }};
-  const revenues = {{ revenues | safe }};
-  const traffics = {{ traffics | safe }};
-  // 1. Cấu hình Biểu đồ Doanh thu (Bar Chart)
-  const ctxRev = document.getElementById("revenueChart").getContext("2d");
-  new Chart(ctxRev, {
+  // Dữ liệu vãng lai
+  const walkinDates = {{ dates | safe }};
+  const walkinRevenues = {{ revenues | safe }};
+  const walkinTraffics = {{ traffics | safe }};
+
+  // Dữ liệu vé tháng
+  const monthlyLabels = {{ monthly_labels | safe }};
+  const monthlyRevenues = {{ monthly_revenues | safe }};
+  const monthlyCounts = {{ monthly_counts | safe }};
+
+  let walkinRevenueChart;
+  let walkinTrafficChart;
+  let monthlyRevenueChart;
+  let monthlyCountChart;
+
+  const ctxWalkinRev = document.getElementById("walkinRevenueChart").getContext("2d");
+  walkinRevenueChart = new Chart(ctxWalkinRev, {
     type: "bar",
     data: {
-      labels: dates,
+      labels: walkinDates,
       datasets: [
         {
           label: "Doanh thu (VNĐ)",
-          data: revenues,
-          backgroundColor: "rgba(16, 185, 129, 0.6)", // Màu xanh lá
+          data: walkinRevenues,
+          backgroundColor: "rgba(16, 185, 129, 0.6)",
           borderColor: "rgba(16, 185, 129, 1)",
           borderWidth: 1,
           borderRadius: 4,
@@ -193,45 +180,125 @@ block extra_head %}
     },
     options: {
       responsive: true,
-      scales: {
-        y: { beginAtZero: true },
-      },
+      scales: { y: { beginAtZero: true } },
       plugins: {
         tooltip: {
           callbacks: {
-            label: function (context) {
-              return context.raw.toLocaleString("vi-VN") + " VNĐ";
-            },
+            label: (context) => context.raw.toLocaleString("vi-VN") + " VNĐ",
           },
         },
       },
     },
   });
 
-  // 2. Cấu hình Biểu đồ Lưu lượng (Line Chart)
-  const ctxTraff = document.getElementById("trafficChart").getContext("2d");
-  new Chart(ctxTraff, {
+  const ctxWalkinTraff = document.getElementById("walkinTrafficChart").getContext("2d");
+  walkinTrafficChart = new Chart(ctxWalkinTraff, {
     type: "line",
     data: {
-      labels: dates,
+      labels: walkinDates,
       datasets: [
         {
           label: "Lượt xe vào",
-          data: traffics,
-          backgroundColor: "rgba(59, 130, 246, 0.2)", // Màu xanh dương
+          data: walkinTraffics,
+          backgroundColor: "rgba(59, 130, 246, 0.2)",
           borderColor: "rgba(59, 130, 246, 1)",
           borderWidth: 3,
           fill: true,
-          tension: 0.3, // Làm mềm đường cong
+          tension: 0.3,
         },
       ],
     },
     options: {
       responsive: true,
-      scales: {
-        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+    },
+  });
+
+  const ctxMonthlyRev = document.getElementById("monthlyRevenueChart").getContext("2d");
+  monthlyRevenueChart = new Chart(ctxMonthlyRev, {
+    type: "bar",
+    data: {
+      labels: monthlyLabels,
+      datasets: [
+        {
+          label: "Doanh thu vé tháng (VNĐ)",
+          data: monthlyRevenues,
+          backgroundColor: "rgba(79, 70, 229, 0.7)",
+          borderColor: "rgba(79, 70, 229, 1)",
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      scales: { y: { beginAtZero: true } },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (context) => context.raw.toLocaleString("vi-VN") + " VNĐ",
+          },
+        },
       },
     },
   });
+
+  const ctxMonthlyCount = document.getElementById("monthlyCountChart").getContext("2d");
+  monthlyCountChart = new Chart(ctxMonthlyCount, {
+    type: "line",
+    data: {
+      labels: monthlyLabels,
+      datasets: [
+        {
+          label: "Số lượt đóng",
+          data: monthlyCounts,
+          backgroundColor: "rgba(14, 165, 233, 0.2)",
+          borderColor: "rgba(14, 165, 233, 1)",
+          borderWidth: 3,
+          fill: true,
+          tension: 0.3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+    },
+  });
+
+  // Chuyển tab
+  const tabs = document.querySelectorAll("[data-tab-target]");
+  const panels = document.querySelectorAll("[data-tab-panel]");
+  const defaultTab = "{{ active_tab }}".trim() || "walkin";
+
+  function activateTab(name) {
+    tabs.forEach((btn) => {
+      const isActive = btn.dataset.tabTarget === name;
+      btn.classList.toggle("bg-indigo-600", isActive);
+      btn.classList.toggle("text-white", isActive);
+      btn.classList.toggle("border-indigo-600", isActive);
+      btn.classList.toggle("bg-white", !isActive);
+      btn.classList.toggle("text-slate-700", !isActive);
+    });
+
+    panels.forEach((panel) => {
+      panel.classList.toggle("hidden", panel.dataset.tabPanel !== name);
+    });
+
+    if (name === "monthly" && monthlyRevenueChart && monthlyCountChart) {
+      monthlyRevenueChart.resize();
+      monthlyCountChart.resize();
+    }
+    if (name === "walkin" && walkinRevenueChart && walkinTrafficChart) {
+      walkinRevenueChart.resize();
+      walkinTrafficChart.resize();
+    }
+  }
+
+  tabs.forEach((btn) => {
+    btn.addEventListener("click", () => activateTab(btn.dataset.tabTarget));
+  });
+
+  activateTab(defaultTab);
 </script>
 {% endblock %}

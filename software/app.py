@@ -405,16 +405,19 @@ def statistics():
         "SELECT COUNT(*) FROM transactions WHERE exit_time IS NULL"
     ).fetchone()[0] or 0
 
-    filter_type = request.args.get('filter', '7days') 
-    start_input = request.args.get('start', '')
-    end_input = request.args.get('end', '')
+    active_tab = request.args.get('active_tab', 'walkin')
+
+    # === Thống kê vãng lai (theo ngày) ===
+    walkin_filter = request.args.get('filter_daily', '7days') 
+    start_input = request.args.get('start_daily', '')
+    end_input = request.args.get('end_daily', '')
 
     end_date = datetime.now()
     start_date = end_date - timedelta(days=6) 
 
-    if filter_type == '6months':
+    if walkin_filter == '6months':
         start_date = end_date - timedelta(days=180)
-    elif filter_type == 'custom' and start_input and end_input:
+    elif walkin_filter == 'custom' and start_input and end_input:
         try:
             start_date = datetime.strptime(start_input, "%Y-%m-%d")
             end_date = datetime.strptime(end_input, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
@@ -462,6 +465,73 @@ def statistics():
         final_revenues.append(rev_dict.get(d_str, 0))
         final_traffics.append(traf_dict.get(d_str, 0))
 
+    # === Thống kê vé tháng (theo tháng) ===
+    def shift_month(base_dt, offset):
+        year = base_dt.year + (base_dt.month - 1 + offset) // 12
+        month = (base_dt.month - 1 + offset) % 12 + 1
+        return base_dt.replace(year=year, month=month, day=1)
+
+    month_filter = request.args.get('filter_monthly', '6months')
+    start_month_input = request.args.get('start_month', '')
+    end_month_input = request.args.get('end_month', '')
+
+    month_end = datetime.now().replace(day=1)
+    month_start = shift_month(month_end, -5)
+
+    if month_filter == '12months':
+        month_start = shift_month(month_end, -11)
+    elif month_filter == 'custom' and start_month_input and end_month_input:
+        try:
+            month_start = datetime.strptime(start_month_input, "%Y-%m").replace(day=1)
+            month_end = datetime.strptime(end_month_input, "%Y-%m").replace(day=1)
+            if month_start > month_end:
+                month_start, month_end = month_end, month_start
+        except ValueError:
+            pass
+
+    monthly_dates = []
+    cursor_month = month_start
+    while cursor_month <= month_end:
+        monthly_dates.append(cursor_month)
+        next_month = cursor_month.replace(day=28) + timedelta(days=4)
+        cursor_month = next_month.replace(day=1)
+
+    month_keys = [m.strftime("%Y-%m") for m in monthly_dates]
+    month_labels = [m.strftime("%m/%Y") for m in monthly_dates]
+
+    if month_keys:
+        m_start_key = month_keys[0]
+        m_end_key = month_keys[-1]
+    else:
+        m_start_key = month_end.strftime("%Y-%m")
+        m_end_key = month_end.strftime("%Y-%m")
+
+    conn_month = get_db_connection()
+    monthly_rev_data = conn_month.execute("""
+        SELECT month, SUM(amount) as total
+        FROM monthly_payments
+        WHERE month BETWEEN ? AND ?
+        GROUP BY month
+        ORDER BY month
+    """, (m_start_key, m_end_key)).fetchall()
+
+    monthly_count_data = conn_month.execute("""
+        SELECT month, COUNT(*) as total
+        FROM monthly_payments
+        WHERE month BETWEEN ? AND ?
+        GROUP BY month
+        ORDER BY month
+    """, (m_start_key, m_end_key)).fetchall()
+    conn_month.close()
+
+    monthly_rev_dict = {row['month']: row['total'] for row in monthly_rev_data}
+    monthly_count_dict = {row['month']: row['total'] for row in monthly_count_data}
+
+    monthly_revenues = [monthly_rev_dict.get(key, 0) for key in month_keys]
+    monthly_counts = [monthly_count_dict.get(key, 0) for key in month_keys]
+    monthly_total = sum(monthly_revenues)
+    monthly_payment_count = sum(monthly_counts)
+
     return render_template('statistics.html', 
                            revenue_today=revenue_today,
                            traffic_today=traffic_today,
@@ -469,9 +539,18 @@ def statistics():
                            dates=json.dumps(final_dates),
                            revenues=json.dumps(final_revenues),
                            traffics=json.dumps(final_traffics),
-                           current_filter=filter_type,
+                           current_filter=walkin_filter,
                            current_start=start_date.strftime("%Y-%m-%d"),
-                           current_end=end_date.strftime("%Y-%m-%d"))
+                           current_end=end_date.strftime("%Y-%m-%d"),
+                           monthly_labels=json.dumps(month_labels),
+                           monthly_revenues=json.dumps(monthly_revenues),
+                           monthly_counts=json.dumps(monthly_counts),
+                           monthly_filter=month_filter,
+                           monthly_start=month_start.strftime("%Y-%m"),
+                           monthly_end=month_end.strftime("%Y-%m"),
+                           monthly_total=monthly_total,
+                           monthly_payment_count=monthly_payment_count,
+                           active_tab=active_tab)
 
 # ======================================================
 # --- TRANG BẢO VỆ (SECURITY DASHBOARD) ---
