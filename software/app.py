@@ -372,7 +372,7 @@ def add_card():
     try:
         conn.execute(
             'INSERT INTO cards (card_id, holder_name, license_plate, ticket_type, expiry_date, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (card_id, holder_name if ticket_type == 'monthly' else f'Khách vãng lai {card_id}',
+            (card_id, holder_name if ticket_type == 'monthly' else 'N/A',
              license_plate if ticket_type == 'monthly' else None, ticket_type, expiry_date, created_at, 'active')
         )
         conn.commit()

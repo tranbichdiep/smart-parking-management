@@ -149,11 +149,11 @@
             {% endif %}
           </td>
           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {{ card.created_at|vn_dt if card.created_at else 'N/A' }}
+            {{ card.created_at|vn_dt("%d/%m/%Y") if card.created_at else 'N/A' }}
           </td>
           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             {% if card.expiry_date %}
-              {{ card.expiry_date|vn_dt }}
+              {{ card.expiry_date|vn_dt("%d/%m/%Y") }}
             {% else %}
               <span class="text-gray-400">Chưa thiết lập</span>
             {% endif %}
@@ -177,8 +177,8 @@
                 data-holder-name="{{ card.holder_name or '' }}"
                 data-license-plate="{{ card.license_plate or '' }}"
                 data-ticket-type="{{ card.ticket_type }}"
-                data-created-at="{{ card.created_at or '' }}"
-                data-expiry-date="{{ card.expiry_date or '' }}"
+                data-created-at="{{ card.created_at|vn_dt('%d/%m/%Y') if card.created_at else '' }}"
+                data-expiry-date="{{ card.expiry_date|vn_dt('%d/%m/%Y') if card.expiry_date else '' }}"
               >
                 Sửa
               </button>
