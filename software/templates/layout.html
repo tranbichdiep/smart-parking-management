@@ -67,7 +67,7 @@
                 href="{{ url_for('statistics') }}"
                 class="text-sm font-medium transition-colors {{ 'text-sky-600 font-semibold' if request.endpoint == 'statistics' else 'text-slate-600 hover:text-sky-500' }}"
               >
-                📊 Thống kê
+                Thống kê
               </a>
               <a
                 href="{{ url_for('settings') }}"
@@ -145,7 +145,7 @@
               class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['view_transactions'] else 'text-slate-700 hover:bg-slate-100' }}"
               >Giao dịch</a
             >
-            <a href="{{ url_for('statistics') }}" class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint == 'statistics' else 'text-slate-700 hover:bg-slate-100' }}">📊 Thống kê</a>
+            <a href="{{ url_for('statistics') }}" class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint == 'statistics' else 'text-slate-700 hover:bg-slate-100' }}">Thống kê</a>
             <a
               href="{{ url_for('user_management') }}"
               class="block px-3 py-2 rounded-md text-base font-medium {{ 'bg-sky-50 text-sky-700' if request.endpoint in ['user_management'] else 'text-slate-700 hover:bg-slate-100' }}"

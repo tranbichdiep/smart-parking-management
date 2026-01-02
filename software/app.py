@@ -46,6 +46,23 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+
+def escape_like(value: str) -> str:
+    """Escapes wildcard chars for safe LIKE queries."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def parse_int_param(raw_value, default, max_value=None):
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+    if value < 1:
+        value = default
+    if max_value is not None:
+        value = min(value, max_value)
+    return value
+
 def add_months(base_date, months):
     """Cộng thêm số tháng, giữ nguyên ngày trong tháng nếu có thể."""
     month = base_date.month - 1 + months
@@ -234,9 +251,49 @@ def index():
 @login_required
 @role_required('admin')
 def admin_dashboard():
+    q = (request.args.get('q') or '').strip()
+    ticket_type = (request.args.get('ticket_type') or '').strip()
+    status_filter = (request.args.get('status') or '').strip()
+    page = parse_int_param(request.args.get('page', 1), 1)
+    per_page = parse_int_param(request.args.get('per_page', 25), 25, 100)
+    offset = (page - 1) * per_page
+
     conn = get_db_connection()
-    rows = conn.execute('SELECT card_id, holder_name, license_plate, ticket_type, status, created_at, expiry_date FROM cards ORDER BY card_id').fetchall()
+    conditions = []
+    params = []
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if q:
+        like_term = f"%{escape_like(q)}%"
+        conditions.append(
+            "(card_id LIKE ? ESCAPE '\\' OR IFNULL(holder_name,'') LIKE ? ESCAPE '\\' OR IFNULL(license_plate,'') LIKE ? ESCAPE '\\')"
+        )
+        params.extend([like_term, like_term, like_term])
+
+    if ticket_type in ('monthly', 'daily'):
+        conditions.append("ticket_type = ?")
+        params.append(ticket_type)
+
+    if status_filter == 'expired':
+        conditions.append("ticket_type = 'monthly' AND expiry_date IS NOT NULL AND expiry_date < ?")
+        params.append(now_str)
+    elif status_filter in ('active', 'lost'):
+        conditions.append("status = ?")
+        params.append(status_filter)
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    total_cards = conn.execute(f"SELECT COUNT(*) FROM cards {where_clause}", params).fetchone()[0]
+    rows = conn.execute(
+        f"""SELECT card_id, holder_name, license_plate, ticket_type, status, created_at, expiry_date
+            FROM cards
+            {where_clause}
+            ORDER BY created_at DESC, card_id
+            LIMIT ? OFFSET ?""",
+        params + [per_page, offset]
+    ).fetchall()
     conn.close()
+
     cards = []
     now_dt = datetime.now()
     for row in rows:
@@ -252,7 +309,37 @@ def admin_dashboard():
             display_status = 'expired'
         card['display_status'] = display_status
         cards.append(card)
-    return render_template('admin_dashboard.html', cards=cards)
+
+    has_next = offset + per_page < total_cards
+    prev_url = url_for('admin_dashboard', **{k: v for k, v in {
+        'q': q or None,
+        'ticket_type': ticket_type or None,
+        'status': status_filter or None,
+        'per_page': per_page,
+        'page': page - 1
+    }.items() if v is not None}) if page > 1 else None
+    next_url = url_for('admin_dashboard', **{k: v for k, v in {
+        'q': q or None,
+        'ticket_type': ticket_type or None,
+        'status': status_filter or None,
+        'per_page': per_page,
+        'page': page + 1
+    }.items() if v is not None}) if has_next else None
+
+    return render_template(
+        'admin_dashboard.html',
+        cards=cards,
+        page=page,
+        per_page=per_page,
+        total_cards=total_cards,
+        filters={
+            'q': q,
+            'ticket_type': ticket_type,
+            'status': status_filter,
+        },
+        prev_url=prev_url,
+        next_url=next_url
+    )
 
 # ======================================================
 # --- QUẢN LÝ NHÂN VIÊN (USER MANAGEMENT) ---
@@ -262,12 +349,75 @@ def admin_dashboard():
 @login_required
 @role_required('admin')
 def user_management():
+    q = (request.args.get('q') or '').strip()
+    role_filter = (request.args.get('role') or '').strip()
+    status_filter = (request.args.get('status') or '').strip()
+    page = parse_int_param(request.args.get('page', 1), 1)
+    per_page = parse_int_param(request.args.get('per_page', 25), 25, 100)
+    offset = (page - 1) * per_page
+
     conn = get_db_connection()
+    conditions = []
+    params = []
+
+    if q:
+        like_term = f"%{escape_like(q)}%"
+        conditions.append(
+            "(username LIKE ? ESCAPE '\\' OR full_name LIKE ? ESCAPE '\\' OR employee_code LIKE ? ESCAPE '\\')"
+        )
+        params.extend([like_term, like_term, like_term])
+
+    if role_filter in ('admin', 'security'):
+        conditions.append("role = ?")
+        params.append(role_filter)
+
+    if status_filter in ('active', 'locked'):
+        conditions.append("status = ?")
+        params.append(status_filter)
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    total_users = conn.execute(f"SELECT COUNT(*) FROM users {where_clause}", params).fetchone()[0]
     users = conn.execute(
-        'SELECT username, role, status, employee_code, full_name FROM users ORDER BY employee_code'
+        f"""SELECT username, role, status, employee_code, full_name
+            FROM users
+            {where_clause}
+            ORDER BY employee_code
+            LIMIT ? OFFSET ?""",
+        params + [per_page, offset]
     ).fetchall()
     conn.close()
-    return render_template('user_management.html', users=users)
+
+    has_next = offset + per_page < total_users
+    prev_url = url_for('user_management', **{k: v for k, v in {
+        'q': q or None,
+        'role': role_filter or None,
+        'status': status_filter or None,
+        'per_page': per_page,
+        'page': page - 1
+    }.items() if v is not None}) if page > 1 else None
+    next_url = url_for('user_management', **{k: v for k, v in {
+        'q': q or None,
+        'role': role_filter or None,
+        'status': status_filter or None,
+        'per_page': per_page,
+        'page': page + 1
+    }.items() if v is not None}) if has_next else None
+
+    return render_template(
+        'user_management.html',
+        users=users,
+        page=page,
+        per_page=per_page,
+        total_users=total_users,
+        filters={
+            'q': q,
+            'role': role_filter,
+            'status': status_filter,
+        },
+        prev_url=prev_url,
+        next_url=next_url
+    )
 
 @app.route('/admin/users/add', methods=['POST'])
 @login_required
@@ -510,12 +660,91 @@ def delete_card(card_id):
 @login_required
 @role_required('admin')
 def view_transactions():
+    q = (request.args.get('q') or '').strip()
+    status_filter = (request.args.get('status') or '').strip()
+    guard_filter = (request.args.get('guard') or '').strip()
+    date_from = (request.args.get('from') or '').strip()
+    date_to = (request.args.get('to') or '').strip()
+    page = parse_int_param(request.args.get('page', 1), 1)
+    per_page = parse_int_param(request.args.get('per_page', 25), 25, 200)
+    offset = (page - 1) * per_page
+
     conn = get_db_connection()
+    conditions = []
+    params = []
+
+    if q:
+        like_term = f"%{escape_like(q)}%"
+        conditions.append(
+            "(card_id LIKE ? ESCAPE '\\' OR IFNULL(license_plate,'') LIKE ? ESCAPE '\\' OR IFNULL(security_user,'') LIKE ? ESCAPE '\\')"
+        )
+        params.extend([like_term, like_term, like_term])
+
+    if status_filter == 'open':
+        conditions.append("exit_time IS NULL")
+    elif status_filter == 'closed':
+        conditions.append("exit_time IS NOT NULL")
+
+    if guard_filter:
+        like_guard = f"%{escape_like(guard_filter)}%"
+        conditions.append("IFNULL(security_user,'') LIKE ? ESCAPE '\\'")
+        params.append(like_guard)
+
+    if date_from:
+        conditions.append("entry_time >= ?")
+        params.append(f"{date_from} 00:00:00")
+    if date_to:
+        conditions.append("entry_time <= ?")
+        params.append(f"{date_to} 23:59:59")
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    total_transactions = conn.execute(f"SELECT COUNT(*) FROM transactions {where_clause}", params).fetchone()[0]
     rows = conn.execute(
-        f"""SELECT * FROM transactions ORDER BY id DESC LIMIT 50"""
+        f"""SELECT * FROM transactions
+            {where_clause}
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?""",
+        params + [per_page, offset]
     ).fetchall()
     conn.close()
-    return render_template('transactions.html', transactions=rows)
+
+    has_next = offset + per_page < total_transactions
+    prev_url = url_for('view_transactions', **{k: v for k, v in {
+        'q': q or None,
+        'status': status_filter or None,
+        'guard': guard_filter or None,
+        'from': date_from or None,
+        'to': date_to or None,
+        'per_page': per_page,
+        'page': page - 1
+    }.items() if v is not None}) if page > 1 else None
+    next_url = url_for('view_transactions', **{k: v for k, v in {
+        'q': q or None,
+        'status': status_filter or None,
+        'guard': guard_filter or None,
+        'from': date_from or None,
+        'to': date_to or None,
+        'per_page': per_page,
+        'page': page + 1
+    }.items() if v is not None}) if has_next else None
+
+    return render_template(
+        'transactions.html',
+        transactions=rows,
+        page=page,
+        per_page=per_page,
+        total_transactions=total_transactions,
+        filters={
+            'q': q,
+            'status': status_filter,
+            'guard': guard_filter,
+            'from': date_from,
+            'to': date_to,
+        },
+        prev_url=prev_url,
+        next_url=next_url
+    )
     
 @app.route('/admin/settings', methods=['GET', 'POST'])
 @login_required
