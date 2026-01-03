@@ -74,6 +74,7 @@ void stopPolling();
 void setup() {
   Serial.begin(115200);
   Serial.println("\n[Project] RFID Parking - Pass-through Logic");
+  Serial.println("System initializing...");
   
   // 1. Cấu hình cảm biến
   pinMode(SENSOR_PIN, INPUT); // Cần thiết lập INPUT
@@ -83,7 +84,7 @@ void setup() {
   mfrc522.PCD_Init();
   myServo.attach(SERVO_PIN);
   myServo.write(0); // Đóng ban đầu
-  Serial.println("Hệ thống sẵn sàng.");
+  Serial.println("System ready.");
 }
 
 /**
@@ -97,8 +98,8 @@ void loop() {
   if (gatePhase == 1) {
     // [GIAI ĐOẠN 1]: Cổng đang mở, chờ xe bắt đầu đi qua
     // Kiểm tra xem cảm biến có bị che không (LOW)
-    if (digitalRead(SENSOR_PIN) == LOW) { 
-      Serial.println("🚗 Xe đã bắt đầu đi qua (Che cảm biến)...");
+    if (digitalRead(SENSOR_PIN) == LOW) {
+      Serial.println("Vehicle started passing (Sensor blocked)...");
       gatePhase = 2; // Chuyển sang giai đoạn chờ xe đi hết
     }
   }
@@ -106,7 +107,7 @@ void loop() {
     // [GIAI ĐOẠN 2]: Xe đang chắn, chờ xe đi hết
     // Kiểm tra xem cảm biến đã thoáng chưa (HIGH)
     if (digitalRead(SENSOR_PIN) == HIGH) {
-      Serial.println("👋 Xe đã đi qua hoàn toàn. Đóng cổng!");
+      Serial.println("Vehicle passed completely. Closing gate!");
       delay(1000);
       myServo.write(0); // Đóng ngay lập tức
       gatePhase = 0;    // Reset về trạng thái đóng
@@ -141,19 +142,19 @@ void handleIdleState() {
   
   unsigned long now = millis();
   if (now - lastTriggerTime < COOL_DOWN_MS) {
-    Serial.println("Cooldown... Bỏ qua.");
+    Serial.println("Cooldown... Skipping.");
     mfrc522.PICC_HaltA(); 
     return;
   }
 
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Lỗi: Mất WiFi.");
+    Serial.println("Error: WiFi disconnected.");
     mfrc522.PICC_HaltA();
     return;
   }
 
   String cardUid = getCardUID(mfrc522.uid);
-  Serial.printf("Thẻ quét: %s\n", cardUid.c_str());
+  Serial.printf("Card scanned: %s\n", cardUid.c_str());
 
   HTTPClient http;
   char serverUrl[100];
@@ -168,7 +169,7 @@ void handleIdleState() {
   String jsonPayload;
   serializeJson(jsonDoc, jsonPayload);
 
-  Serial.println("Gửi yêu cầu...");
+  Serial.println("Sending request...");
   int httpResponseCode = http.POST(jsonPayload);
   
   if (httpResponseCode > 0) {
@@ -179,20 +180,20 @@ void handleIdleState() {
     const char* action = responseDoc["action"];
     
     if (action && strcmp(action, "open") == 0) {
-      Serial.println("✅ Mở cửa (Tự động)");
+      Serial.println("Opening gate (Automatic)");
       triggerOpen();
       lastTriggerTime = millis();
     } 
     else if (action && strcmp(action, "poll") == 0) {
       int pollId = responseDoc["poll_id"];
       startPolling(pollId); 
-    } 
+    }
     else {
-      Serial.println("❌ Server từ chối.");
+      Serial.println("Server denied access.");
       lastTriggerTime = millis(); 
     }
   } else {
-    Serial.printf("Lỗi HTTP POST: %s\n", http.errorToString(httpResponseCode).c_str());
+    Serial.printf("HTTP POST Error: %s\n", http.errorToString(httpResponseCode).c_str());
     lastTriggerTime = millis(); 
   }
   http.end();
@@ -202,7 +203,7 @@ void handleIdleState() {
 void handlePollingState() {
   unsigned long now = millis();
   if (now - pollingStartTime > POLLING_TIMEOUT) {
-    Serial.println("\n❌ Hết thời gian chờ duyệt.");
+    Serial.println("\nPolling timeout.");
     stopPolling();
     return;
   }
@@ -229,12 +230,12 @@ void handlePollingState() {
     const char* status = statusDoc["status"];
 
     if (status && strcmp(status, "approved") == 0) {
-      Serial.println("\n✅ Đã được duyệt! Mở cửa.");
+      Serial.println("\nApproved! Opening gate.");
       triggerOpen(); 
       stopPolling();
     }
     else if (status && strcmp(status, "denied") == 0) {
-      Serial.println("\n❌ Bị từ chối.");
+      Serial.println("\nAccess denied.");
       stopPolling();
     }
   } 
@@ -242,7 +243,7 @@ void handlePollingState() {
 }
 
 void startPolling(int pollId) {
-  Serial.printf("Chờ duyệt (ID: %d)...\n", pollId);
+  Serial.printf("Waiting for approval (ID: %d)...\n", pollId);
   currentState = STATE_POLLING;
   currentPollId = pollId;
   pollingStartTime = millis();
@@ -252,10 +253,10 @@ void startPolling(int pollId) {
 void stopPolling() {
   currentState = STATE_IDLE;
   currentPollId = 0;
-  lastTriggerTime = millis(); 
-  Serial.println("Chờ rút thẻ...");
+  lastTriggerTime = millis();
+  Serial.println("Waiting for card removal...");
   while(mfrc522.PICC_IsNewCardPresent()) { delay(50); }
-  Serial.println("Sẵn sàng.");
+  Serial.println("Ready.");
 }
 
 String getCardUID(MFRC522::Uid uid) {
@@ -274,27 +275,27 @@ String getCardUID(MFRC522::Uid uid) {
  * ĐÃ SỬA: Không dùng hẹn giờ. Chỉ mở và đặt trạng thái chờ xe.
  */
 void triggerOpen() {
-  myServo.write(90); 
-  
+  myServo.write(90);
+
   // Kích hoạt Phase 1: Chờ xe vào che cảm biến
-  gatePhase = 1; 
-  
-  Serial.println("Servo đã mở. Đang chờ xe đi qua (Che -> Hết che)...");
+  gatePhase = 1;
+
+  Serial.println("Servo opened. Waiting for vehicle to pass (Block -> Clear)...");
 }
 
 void connectWiFi(unsigned long timeout_ms) {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.printf("Kết nối WiFi \"%s\"...\n", WIFI_SSID);
+  Serial.printf("Connecting to WiFi \"%s\"...\n", WIFI_SSID);
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeout_ms) {
     delay(250); Serial.print(".");
   }
   Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("✅ IP: "); Serial.println(WiFi.localIP());
+    Serial.print("IP: "); Serial.println(WiFi.localIP());
   } else {
-    Serial.println("⚠️ Lỗi WiFi.");
+    Serial.println("WiFi Error.");
   }
 }
 
