@@ -1,9 +1,6 @@
 /**
- * Project: RFID Servo Control - Event Based Closing
- * * Mô tả:
- * - Hệ thống sử dụng cơ chế "Xe qua mới đóng" (Pass-through logic).
- * - Quy trình: Mở -> Chờ che cảm biến -> Chờ hết che -> Đóng.
- * - KHÔNG sử dụng hẹn giờ tự đóng.
+ * Project: RFID Servo Control - Smart Parking System
+ * Upgrade: WiFiManager & Configurable Server IP
  */
 
 #include <SPI.h>
@@ -12,14 +9,18 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <WiFiManager.h> // Cần cài thư viện WiFiManager by tzapu
+#include <Preferences.h> // Thư viện lưu trữ vào Flash (có sẵn trong ESP32 Core)
 
-// ================== CẤU HÌNH CẦN THAY ĐỔI ==================
-const char* WIFI_SSID = "nosiaht_esp";    // <-- THAY TÊN WIFI
-const char* WIFI_PASS = "88888888"; // <-- THAY PASS WIFI
-const char* SERVER_IP = "192.168.0.101"; // <-- THAY IP SERVER
-const int SERVER_PORT = 5000;
-const char* DEVICE_TOKEN = "my_secret_device_token_12345";
-// ===========================================================
+// --- CẤU HÌNH MẶC ĐỊNH ---
+// Các giá trị này sẽ hiển thị gợi ý trong trang cấu hình
+char server_ip[40] = "192.168.0.101"; 
+char server_port[6] = "5000";
+char device_token[40] = "my_secret_device_token_12345";
+
+// --- KHỞI TẠO CÁC ĐỐI TƯỢNG ---
+Preferences preferences; // Để lưu IP Server vào bộ nhớ máy
+WiFiManager wm;          // Quản lý kết nối WiFi
 
 // --- API Endpoints ---
 const char* API_DEVICE_SCAN = "/api/gate/device_scan";
@@ -34,38 +35,42 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 #define SERVO_PIN 27
 Servo myServo;
 
-// --- SENSOR (CẢM BIẾN VẬT CẢN) ---
+// --- SENSOR ---
 #define SENSOR_PIN 26
-// Mặc định cảm biến IR: LOW = Có vật cản, HIGH = Không có vật cản
 
-// --- Biến quản lý trạng thái đóng mở cổng ---
-// 0: Cổng đóng/Idle
-// 1: Cổng mở, đang chờ xe đi vào (Chờ che cảm biến)
-// 2: Xe đang ở giữa cổng, chờ xe đi ra (Chờ hết che cảm biến)
-int gatePhase = 0; 
+// --- NÚT RESET CONFIG (Dùng nút BOOT trên mạch ESP32 - GPIO 0) ---
+#define TRIGGER_PIN 0 
 
-// --- Cooldown (tránh quét 2 lần) ---
+// --- Biến quản lý trạng thái cổng ---
+int gatePhase = 0;
+
+// --- Cooldown & Polling ---
 unsigned long lastTriggerTime = 0;
 const unsigned long COOL_DOWN_MS = 3000UL;
 
-// --- State Machine (Máy trạng thái RFID) ---
 enum State {
-  STATE_IDLE,     // Chờ quét
-  STATE_POLLING   // Đang chờ duyệt
+  STATE_IDLE,    
+  STATE_POLLING   
 };
 State currentState = STATE_IDLE;
 unsigned long pollingStartTime = 0; 
 unsigned long lastPollCheck = 0;    
-int currentPollId = 0;              
-
+int currentPollId = 0;
 const unsigned long POLLING_TIMEOUT = 30000UL; 
 const unsigned long POLLING_INTERVAL = 1000UL; 
 
+// Flag để lưu config khi người dùng ấn Save trên Portal
+bool shouldSaveConfig = false;
+
+// Callback khi WiFiManager lưu cấu hình
+void saveConfigCallback () {
+  Serial.println("Should save config");
+  shouldSaveConfig = true;
+}
+
 // --- Prototypes ---
 String getCardUID(MFRC522::Uid uid);
-void triggerOpen(); 
-void connectWiFi(unsigned long timeout_ms = 15000UL);
-void maintainWiFi();
+void triggerOpen();
 void handleIdleState();    
 void handlePollingState(); 
 void startPolling(int pollId);
@@ -73,54 +78,99 @@ void stopPolling();
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n[Project] RFID Parking - Pass-through Logic");
-  Serial.println("System initializing...");
-  
-  // 1. Cấu hình cảm biến
-  pinMode(SENSOR_PIN, INPUT); // Cần thiết lập INPUT
+  Serial.println("\n[Project] Smart Parking - WiFiManager Version");
 
-  connectWiFi();
+  // 1. Cấu hình chân
+  pinMode(SENSOR_PIN, INPUT); 
+  pinMode(TRIGGER_PIN, INPUT_PULLUP); // Nút BOOT
+
+  // 2. Khởi tạo thiết bị ngoại vi
   SPI.begin(18, 19, 23, SS_PIN);
   mfrc522.PCD_Init();
   myServo.attach(SERVO_PIN);
-  myServo.write(0); // Đóng ban đầu
-  Serial.println("System ready.");
+  myServo.write(0); // Đóng cổng
+
+  // 3. Load cấu hình cũ từ bộ nhớ Flash
+  preferences.begin("parking_config", false); // Namespace "parking_config"
+  
+  // Lấy giá trị đã lưu, nếu chưa có thì lấy mặc định
+  String load_ip = preferences.getString("server_ip", "192.168.0.101"); 
+  String load_port = preferences.getString("server_port", "5000");
+  String load_token = preferences.getString("device_token", "my_secret_device_token_12345");
+
+  load_ip.toCharArray(server_ip, 40);
+  load_port.toCharArray(server_port, 6);
+  load_token.toCharArray(device_token, 40);
+
+  Serial.println("--- Current Config ---");
+  Serial.printf("Server IP: %s\n", server_ip);
+  Serial.printf("Port: %s\n", server_port);
+  Serial.println("----------------------");
+
+  // 4. Cấu hình WiFiManager
+  wm.setSaveConfigCallback(saveConfigCallback);
+  
+  // Tạo các ô nhập liệu trong trang cấu hình
+  WiFiManagerParameter custom_server_ip("server_ip", "IP May Chu (VD: 192.168.1.10)", server_ip, 40);
+  WiFiManagerParameter custom_server_port("server_port", "Port (VD: 5000)", server_port, 6);
+  WiFiManagerParameter custom_device_token("device_token", "Device Token", device_token, 40);
+
+  wm.addParameter(&custom_server_ip);
+  wm.addParameter(&custom_server_port);
+  wm.addParameter(&custom_device_token);
+
+  // LOGIC RESET CẤU HÌNH:
+  // Nếu giữ nút BOOT (GPIO 0) khi khởi động -> Xóa cài đặt WiFi để cấu hình lại
+  if (digitalRead(TRIGGER_PIN) == LOW) {
+    Serial.println("Nut BOOT duoc nhan! Dang reset WiFi settings...");
+    wm.resetSettings(); // Xóa SSID/Pass đã lưu
+    delay(1000); // Chờ chút cho chắc
+  }
+
+  // Tự động kết nối hoặc bật Portal cấu hình
+  // Tên WiFi phát ra: "Diep_ESP32", không pass
+  if (!wm.autoConnect("Diep_ESP32")) {
+    Serial.println("Ket noi that bai. Resetting...");
+    ESP.restart();
+  }
+
+  // Kết nối thành công
+  Serial.println("Da ket noi WiFi!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // 5. Lưu lại cấu hình mới nếu người dùng vừa nhập thay đổi
+  if (shouldSaveConfig) {
+    strcpy(server_ip, custom_server_ip.getValue());
+    strcpy(server_port, custom_server_port.getValue());
+    strcpy(device_token, custom_device_token.getValue());
+
+    Serial.println("Dang luu cau hinh moi vao Flash...");
+    preferences.putString("server_ip", server_ip);
+    preferences.putString("server_port", server_port);
+    preferences.putString("device_token", device_token);
+    preferences.end();
+  }
 }
 
-/**
- * Hàm loop chính (Non-Blocking)
- */
 void loop() {
-  // ============================================================
-  // 0. LOGIC ĐÓNG CỔNG THEO SỰ KIỆN (XE QUA MỚI ĐÓNG)
-  // ============================================================
-  
+  // Logic cổng thông minh (Xe qua mới đóng)
   if (gatePhase == 1) {
-    // [GIAI ĐOẠN 1]: Cổng đang mở, chờ xe bắt đầu đi qua
-    // Kiểm tra xem cảm biến có bị che không (LOW)
-    if (digitalRead(SENSOR_PIN) == LOW) {
-      Serial.println("Vehicle started passing (Sensor blocked)...");
-      gatePhase = 2; // Chuyển sang giai đoạn chờ xe đi hết
+    if (digitalRead(SENSOR_PIN) == LOW) { // Có xe che
+      Serial.println("Xe bat dau di qua...");
+      gatePhase = 2; 
     }
   }
   else if (gatePhase == 2) {
-    // [GIAI ĐOẠN 2]: Xe đang chắn, chờ xe đi hết
-    // Kiểm tra xem cảm biến đã thoáng chưa (HIGH)
-    if (digitalRead(SENSOR_PIN) == HIGH) {
-      Serial.println("Vehicle passed completely. Closing gate!");
+    if (digitalRead(SENSOR_PIN) == HIGH) { // Xe đi hết
+      Serial.println("Xe da qua hoan toan. Dong cong!");
       delay(1000);
-      myServo.write(0); // Đóng ngay lập tức
-      gatePhase = 0;    // Reset về trạng thái đóng
+      myServo.write(0); 
+      gatePhase = 0;
     }
   }
-  // Nếu gatePhase == 0 thì không làm gì cả (Servo giữ nguyên 0)
 
-  // ============================================================
-
-  // 1. Duy trì WiFi
-  maintainWiFi();
-
-  // 2. Chạy State Machine (Xử lý thẻ)
+  // State Machine xử lý thẻ
   switch (currentState) {
     case STATE_IDLE:
       handleIdleState();
@@ -130,57 +180,58 @@ void loop() {
       break;
   }
   
-  delay(10); 
+  delay(10);
 }
 
-
-// ================= CÁC HÀM XỬ LÝ (GIỮ NGUYÊN) =================
+// --- CÁC HÀM XỬ LÝ ---
 
 void handleIdleState() {
   if (!mfrc522.PICC_IsNewCardPresent()) return;
   if (!mfrc522.PICC_ReadCardSerial()) return;
-  
+
   unsigned long now = millis();
   if (now - lastTriggerTime < COOL_DOWN_MS) {
-    Serial.println("Cooldown... Skipping.");
     mfrc522.PICC_HaltA(); 
     return;
   }
 
+  // Kiểm tra WiFi trước khi gửi
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Error: WiFi disconnected.");
-    mfrc522.PICC_HaltA();
-    return;
+    Serial.println("Mat WiFi! Dang thu ket noi lai...");
+    // WiFiManager tự xử lý reconnect, ta chỉ cần đợi
+    return; 
   }
 
   String cardUid = getCardUID(mfrc522.uid);
-  Serial.printf("Card scanned: %s\n", cardUid.c_str());
+  Serial.printf("Quet the: %s\n", cardUid.c_str());
 
   HTTPClient http;
-  char serverUrl[100];
-  sprintf(serverUrl, "http://%s:%d%s", SERVER_IP, SERVER_PORT, API_DEVICE_SCAN);
+  char serverUrl[128];
+  // SỬ DỤNG IP VÀ PORT TỪ BIẾN CẤU HÌNH
+  sprintf(serverUrl, "http://%s:%s%s", server_ip, server_port, API_DEVICE_SCAN);
   
+  Serial.printf("Goi API: %s\n", serverUrl);
+
   http.begin(serverUrl);
   http.addHeader("Content-Type", "application/json");
 
-  StaticJsonDocument<128> jsonDoc;
+  StaticJsonDocument<200> jsonDoc;
   jsonDoc["card_id"] = cardUid;
-  jsonDoc["token"] = DEVICE_TOKEN;
+  jsonDoc["token"] = device_token;
   String jsonPayload;
   serializeJson(jsonDoc, jsonPayload);
 
-  Serial.println("Sending request...");
   int httpResponseCode = http.POST(jsonPayload);
-  
   if (httpResponseCode > 0) {
     String responsePayload = http.getString();
-    Serial.printf("Server: %s\n", responsePayload.c_str());
+    Serial.printf("Server tra ve: %s\n", responsePayload.c_str());
     StaticJsonDocument<256> responseDoc;
     deserializeJson(responseDoc, responsePayload);
+    
     const char* action = responseDoc["action"];
     
     if (action && strcmp(action, "open") == 0) {
-      Serial.println("Opening gate (Automatic)");
+      Serial.println("Mo cong tu dong");
       triggerOpen();
       lastTriggerTime = millis();
     } 
@@ -189,11 +240,11 @@ void handleIdleState() {
       startPolling(pollId); 
     }
     else {
-      Serial.println("Server denied access.");
-      lastTriggerTime = millis(); 
+      Serial.println("Server tu choi."); // wait
+      lastTriggerTime = millis();
     }
   } else {
-    Serial.printf("HTTP POST Error: %s\n", http.errorToString(httpResponseCode).c_str());
+    Serial.printf("Loi HTTP POST: %s\n", http.errorToString(httpResponseCode).c_str());
     lastTriggerTime = millis(); 
   }
   http.end();
@@ -203,26 +254,24 @@ void handleIdleState() {
 void handlePollingState() {
   unsigned long now = millis();
   if (now - pollingStartTime > POLLING_TIMEOUT) {
-    Serial.println("\nPolling timeout.");
+    Serial.println("\nQua thoi gian cho duyet.");
     stopPolling();
     return;
   }
   if (now - lastPollCheck < POLLING_INTERVAL) return;
 
   lastPollCheck = now;
-  Serial.print(".");
-
-  if (WiFi.status() != WL_CONNECTED) {
-     stopPolling();
-     return;
-  }
+  
+  if (WiFi.status() != WL_CONNECTED) return;
 
   HTTPClient httpPoll;
-  char pollUrl[100];
-  sprintf(pollUrl, "http://%s:%d%s?id=%d", SERVER_IP, SERVER_PORT, API_CHECK_STATUS, currentPollId);
+  char pollUrl[128];
+  // SỬ DỤNG IP VÀ PORT TỪ BIẾN CẤU HÌNH
+  sprintf(pollUrl, "http://%s:%s%s?id=%d", server_ip, server_port, API_CHECK_STATUS, currentPollId);
+  
   httpPoll.begin(pollUrl);
   int httpResponseCode = httpPoll.GET();
-  
+
   if (httpResponseCode > 0) {
     String responsePayload = httpPoll.getString();
     StaticJsonDocument<128> statusDoc;
@@ -230,12 +279,12 @@ void handlePollingState() {
     const char* status = statusDoc["status"];
 
     if (status && strcmp(status, "approved") == 0) {
-      Serial.println("\nApproved! Opening gate.");
+      Serial.println("\nBaove da duyet! Mo cong.");
       triggerOpen(); 
       stopPolling();
     }
     else if (status && strcmp(status, "denied") == 0) {
-      Serial.println("\nAccess denied.");
+      Serial.println("\nBaove Tu choi.");
       stopPolling();
     }
   } 
@@ -243,7 +292,7 @@ void handlePollingState() {
 }
 
 void startPolling(int pollId) {
-  Serial.printf("Waiting for approval (ID: %d)...\n", pollId);
+  Serial.printf("Cho bao ve xac nhan (ID: %d)...\n", pollId);
   currentState = STATE_POLLING;
   currentPollId = pollId;
   pollingStartTime = millis();
@@ -254,9 +303,7 @@ void stopPolling() {
   currentState = STATE_IDLE;
   currentPollId = 0;
   lastTriggerTime = millis();
-  Serial.println("Waiting for card removal...");
-  while(mfrc522.PICC_IsNewCardPresent()) { delay(50); }
-  Serial.println("Ready.");
+  Serial.println("Trang thai IDLE.");
 }
 
 String getCardUID(MFRC522::Uid uid) {
@@ -270,39 +317,8 @@ String getCardUID(MFRC522::Uid uid) {
   return uidString;
 }
 
-/**
- * @brief Kích hoạt servo mở
- * ĐÃ SỬA: Không dùng hẹn giờ. Chỉ mở và đặt trạng thái chờ xe.
- */
 void triggerOpen() {
   myServo.write(90);
-
-  // Kích hoạt Phase 1: Chờ xe vào che cảm biến
-  gatePhase = 1;
-
-  Serial.println("Servo opened. Waiting for vehicle to pass (Block -> Clear)...");
-}
-
-void connectWiFi(unsigned long timeout_ms) {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.printf("Connecting to WiFi \"%s\"...\n", WIFI_SSID);
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeout_ms) {
-    delay(250); Serial.print(".");
-  }
-  Serial.println();
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("IP: "); Serial.println(WiFi.localIP());
-  } else {
-    Serial.println("WiFi Error.");
-  }
-}
-
-void maintainWiFi() {
-  static unsigned long lastCheck = 0;
-  if (millis() - lastCheck >= 10000UL) {
-    lastCheck = millis();
-    if (WiFi.status() != WL_CONNECTED) connectWiFi(7000UL);
-  }
+  gatePhase = 1; // Chờ xe vào
+  Serial.println("Servo MO. Cho xe di qua (Block -> Clear)...");
 }
