@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from flask import Blueprint, Response, current_app, jsonify, request
@@ -13,7 +14,6 @@ api_bp = Blueprint("api", __name__)
 def device_scan():
     """
     API xử lý quẹt thẻ từ ESP32.
-    CẬP NHẬT: Ghi log 'alert_unregistered' vào DB để báo lên Web nếu thẻ lạ.
     """
     conn = None
     try:
@@ -154,8 +154,13 @@ def check_action_status():
 @api_bp.route("/video_feed_in")
 @login_required
 def video_feed_in():
+    # Lấy sẵn cấu hình từ app context trước khi vào vòng lặp
+    placeholder_path = os.path.join(current_app.static_folder, "placeholder.jpg")
+    is_test_mode = current_app.config.get("CAMERA_TEST_MODE", True)
+    rtsp_url = current_app.config["RTSP_URL_IN"]
+
     return Response(
-        generate_frames(current_app.config["RTSP_URL_IN"]),
+        generate_frames(rtsp_url, placeholder_path, is_test_mode),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
@@ -163,7 +168,12 @@ def video_feed_in():
 @api_bp.route("/video_feed_out")
 @login_required
 def video_feed_out():
+    # Lấy sẵn cấu hình từ app context trước khi vào vòng lặp
+    placeholder_path = os.path.join(current_app.static_folder, "placeholder.jpg")
+    is_test_mode = current_app.config.get("CAMERA_TEST_MODE", True)
+    rtsp_url = current_app.config["RTSP_URL_OUT"]
+
     return Response(
-        generate_frames(current_app.config["RTSP_URL_OUT"]),
+        generate_frames(rtsp_url, placeholder_path, is_test_mode),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )

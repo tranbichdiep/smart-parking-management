@@ -1,11 +1,14 @@
 import os
 import shutil
 import time
+import logging
 from datetime import datetime
 
 import cv2
 from flask import current_app
 
+# Sử dụng logger chuẩn của Python để tránh lỗi context của Flask
+logger = logging.getLogger(__name__)
 
 def _ensure_snapshot_dir() -> str:
     snapshot_dir = current_app.config["SNAPSHOT_DIR"]
@@ -21,14 +24,14 @@ def _copy_placeholder(placeholder_path: str, destination_path: str, fallback_nam
         shutil.copy(placeholder_path, destination_path)
         return os.path.basename(destination_path)
     except Exception as exc:
-        current_app.logger.warning("Không thể copy placeholder: %s", exc)
+        logger.warning("Không thể copy placeholder: %s", exc)
         return fallback_name
 
 
 def capture_snapshot(card_id: str, event_type: str) -> str:
     """
     Chụp ảnh từ camera RTSP (hoặc sinh ảnh giả lập nếu bật CAMERA_TEST_MODE).
-    Trả về tên file ảnh đã lưu.
+    Hàm này chạy trong request context nên vẫn dùng current_app được.
     """
     snapshot_dir = _ensure_snapshot_dir()
     placeholder_path = os.path.join(current_app.static_folder, "placeholder.jpg")
@@ -61,7 +64,7 @@ def capture_snapshot(card_id: str, event_type: str) -> str:
         cv2.imwrite(destination_path, frame)
         return filename
     except Exception as exc:
-        current_app.logger.warning("Lỗi chụp ảnh từ %s: %s", rtsp_url, exc)
+        logger.warning("Lỗi chụp ảnh từ %s: %s", rtsp_url, exc)
         offline_name = f"{card_id}_{timestamp}_{event_type}_offline.jpg"
         offline_path = os.path.join(snapshot_dir, offline_name)
         return _copy_placeholder(placeholder_path, offline_path, offline_name)
@@ -82,20 +85,20 @@ def _encode_image(path: str):
             return None
         return bytearray(encoded)
     except Exception as exc:
-        current_app.logger.warning("Không thể đọc placeholder %s: %s", path, exc)
+        logger.warning("Không thể đọc placeholder %s: %s", path, exc)
         return None
 
 
-def generate_frames(rtsp_url: str):
+def generate_frames(rtsp_url: str, placeholder_path: str, is_test_mode: bool):
     """
-    Trả về stream MJPEG cho Flask Response.
-    Nếu CAMERA_TEST_MODE = True, stream ảnh placeholder để tránh lỗi phần cứng.
+    Trả về stream MJPEG.
+    Đã loại bỏ current_app để tránh lỗi Working outside of application context.
+    Tham số được truyền trực tiếp từ bên ngoài vào.
     """
-    placeholder_path = os.path.join(current_app.static_folder, "placeholder.jpg")
     cap = None
 
     while True:
-        if current_app.config.get("CAMERA_TEST_MODE", True):
+        if is_test_mode:
             encoded = _encode_image(placeholder_path)
             if encoded:
                 yield (
@@ -107,14 +110,14 @@ def generate_frames(rtsp_url: str):
 
         try:
             if cap is None:
-                current_app.logger.info("Kết nối camera: %s", rtsp_url)
+                logger.info("Kết nối camera: %s", rtsp_url)
                 cap = cv2.VideoCapture(rtsp_url)
                 if not cap.isOpened():
                     raise ConnectionError(f"Không thể mở stream: {rtsp_url}")
 
             ret, frame = cap.read()
             if not ret or frame is None:
-                current_app.logger.warning("Mất kết nối %s. Đang thử lại...", rtsp_url)
+                logger.warning("Mất kết nối %s. Đang thử lại...", rtsp_url)
                 cap.release()
                 cap = None
                 time.sleep(2)
@@ -131,7 +134,7 @@ def generate_frames(rtsp_url: str):
             )
 
         except Exception as exc:
-            current_app.logger.warning("Lỗi stream %s: %s", rtsp_url, exc)
+            logger.warning("Lỗi stream %s: %s", rtsp_url, exc)
             if cap:
                 cap.release()
             cap = None
