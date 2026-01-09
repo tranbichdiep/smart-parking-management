@@ -6,4 +6,4 @@ database/parking.db-journal
 /software/static/snapshots
 __pycache__/
 *.pyc
-/software/database/parking.db
+software/database/parking.db
