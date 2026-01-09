@@ -81,7 +81,7 @@ void setup() {
   Serial.println("\n[Project] Smart Parking - WiFiManager Version");
 
   // 1. Cấu hình chân
-  pinMode(SENSOR_PIN, INPUT); 
+  pinMode(SENSOR_PIN, INPUT);
   pinMode(TRIGGER_PIN, INPUT_PULLUP); // Nút BOOT
 
   // 2. Khởi tạo thiết bị ngoại vi
@@ -91,65 +91,80 @@ void setup() {
   myServo.write(0); // Đóng cổng
 
   // 3. Load cấu hình cũ từ bộ nhớ Flash
-  preferences.begin("parking_config", false); // Namespace "parking_config"
+  // --- SỬA ĐỔI: Mở -> Đọc -> Đóng ngay lập tức ---
+  preferences.begin("parking_config", false); 
   
-  // Lấy giá trị đã lưu, nếu chưa có thì lấy mặc định
-  String load_ip = preferences.getString("server_ip", "192.168.0.101"); 
-  String load_port = preferences.getString("server_port", "5000");
-  String load_token = preferences.getString("device_token", "my_secret_device_token_12345");
-
-  load_ip.toCharArray(server_ip, 40);
-  load_port.toCharArray(server_port, 6);
-  load_token.toCharArray(device_token, 40);
-
+  if (preferences.isKey("server_ip")) { 
+    // Kiểm tra xem đã có key chưa để tránh lỗi null
+    String load_ip = preferences.getString("server_ip", "192.168.0.101");
+    String load_port = preferences.getString("server_port", "5000");
+    String load_token = preferences.getString("device_token", "my_secret_device_token_12345");
+  
+    load_ip.toCharArray(server_ip, 40);
+    load_port.toCharArray(server_port, 6);
+    load_token.toCharArray(device_token, 40);
+  }
+  
   Serial.println("--- Current Config ---");
   Serial.printf("Server IP: %s\n", server_ip);
   Serial.printf("Port: %s\n", server_port);
   Serial.println("----------------------");
+  
+  preferences.end(); // <--- QUAN TRỌNG: Đóng lại ngay sau khi đọc
+  // ----------------------------------------------
 
   // 4. Cấu hình WiFiManager
   wm.setSaveConfigCallback(saveConfigCallback);
-  
-  // Tạo các ô nhập liệu trong trang cấu hình
-  WiFiManagerParameter custom_server_ip("server_ip", "IP May Chu (VD: 192.168.1.10)", server_ip, 40);
-  WiFiManagerParameter custom_server_port("server_port", "Port (VD: 5000)", server_port, 6);
+  // Tùy chọn: Tự thoát Portal nếu lưu thành công kể cả khi WiFi chưa kết nối ngay
+  wm.setBreakAfterConfig(true); 
+
+  WiFiManagerParameter custom_server_ip("server_ip", "IP May Chu", server_ip, 40);
+  WiFiManagerParameter custom_server_port("server_port", "Port", server_port, 6);
   WiFiManagerParameter custom_device_token("device_token", "Device Token", device_token, 40);
 
   wm.addParameter(&custom_server_ip);
   wm.addParameter(&custom_server_port);
   wm.addParameter(&custom_device_token);
 
-  // LOGIC RESET CẤU HÌNH:
-  // Nếu giữ nút BOOT (GPIO 0) khi khởi động -> Xóa cài đặt WiFi để cấu hình lại
+  // LOGIC RESET CẤU HÌNH
   if (digitalRead(TRIGGER_PIN) == LOW) {
     Serial.println("Nut BOOT duoc nhan! Dang reset WiFi settings...");
-    wm.resetSettings(); // Xóa SSID/Pass đã lưu
-    delay(1000); // Chờ chút cho chắc
+    wm.resetSettings();
+    // Xóa cả cấu hình trong Preferences nếu muốn reset triệt để
+    preferences.begin("parking_config", false);
+    preferences.clear();
+    preferences.end();
+    delay(1000);
   }
 
-  // Tự động kết nối hoặc bật Portal cấu hình
-  // Tên WiFi phát ra: "Diep_ESP32", không pass
+  // Kết nối WiFi
   if (!wm.autoConnect("Diep_ESP32")) {
-    Serial.println("Ket noi that bai. Resetting...");
+    Serial.println("Ket noi that bai hoac timeout. Resetting...");
     ESP.restart();
   }
 
-  // Kết nối thành công
   Serial.println("Da ket noi WiFi!");
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
 
   // 5. Lưu lại cấu hình mới nếu người dùng vừa nhập thay đổi
   if (shouldSaveConfig) {
+    // Lấy giá trị từ WiFiManager
     strcpy(server_ip, custom_server_ip.getValue());
     strcpy(server_port, custom_server_port.getValue());
     strcpy(device_token, custom_device_token.getValue());
 
     Serial.println("Dang luu cau hinh moi vao Flash...");
+    
+    // --- SỬA ĐỔI: Mở lại Preferences chỉ để Ghi ---
+    preferences.begin("parking_config", false); 
     preferences.putString("server_ip", server_ip);
     preferences.putString("server_port", server_port);
     preferences.putString("device_token", device_token);
-    preferences.end();
+    preferences.end(); // Đóng lại ngay sau khi ghi
+    // ---------------------------------------------
+    
+    Serial.println("Luu thanh cong!");
   }
 }
 
