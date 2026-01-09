@@ -1,11 +1,11 @@
 import sqlite3
-import os
 from typing import List
+
 from werkzeug.security import generate_password_hash
 
-# --- Cấu hình đường dẫn Database ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE = os.path.join(BASE_DIR, '..', 'database', 'parking.db')
+from config import Config
+
+DATABASE = Config.DATABASE_PATH
 
 
 def _get_columns(cursor: sqlite3.Cursor, table: str) -> List[str]:

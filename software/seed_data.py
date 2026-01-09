@@ -1,12 +1,11 @@
-import sqlite3
-import os
-import random
 import calendar
+import random
+import sqlite3
 from datetime import datetime, timedelta
 
-# --- CẤU HÌNH ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE = os.path.join(BASE_DIR, '..', 'database', 'parking.db')
+from config import Config
+
+DATABASE = Config.DATABASE_PATH
 
 def add_months(base_date, months):
     """Cộng thêm số tháng, giữ nguyên ngày nếu có thể."""
