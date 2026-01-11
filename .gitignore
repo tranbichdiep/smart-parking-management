@@ -7,3 +7,4 @@ database/parking.db-journal
 __pycache__/
 *.pyc
 software/database/parking.db
+project_stats.json
